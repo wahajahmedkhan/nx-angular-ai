@@ -11,7 +11,7 @@ import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/f
       <label 
         *ngIf="label" 
         [for]="id" 
-        class="block text-sm font-medium mb-1 text-light-text dark:text-dark-text"
+        class="block text-sm font-medium mb-1 text-[var(--techwave-heading-color)]"
       >
         {{ label }}
       </label>
@@ -27,11 +27,11 @@ import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/f
           (ngModelChange)="onInputChange($event)"
           (blur)="onBlur()"
           (keydown)="onKeyDown($event)"
-          class="w-full py-2 px-3 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-60 placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none overflow-auto"
+          class="w-full py-3 px-4 rounded-full bg-[var(--techwave-some-r-bg-color)] border-2 border-[var(--techwave-border-color)] text-[var(--techwave-heading-color)] focus:outline-none focus:border-[var(--techwave-main-color)] transition-all duration-300 ease-in-out disabled:opacity-60 placeholder:text-[var(--techwave-body-color)] resize-none overflow-auto"
         ></textarea>
       </div>
       
-      <p *ngIf="hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+      <p *ngIf="hint" class="mt-2 text-xs text-[var(--techwave-body-color)]">
         {{ hint }}
       </p>
     </div>

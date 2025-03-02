@@ -13,9 +13,9 @@ import { Message } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, FormsModule, MessageComponent, ButtonComponent, TextareaComponent],
   template: `
-    <div class="h-full flex flex-col bg-light-background dark:bg-dark-background">
-      <div class="p-3 md:p-4 border-b border-light-border dark:border-dark-border flex items-center justify-between">
-        <h2 class="text-lg font-medium text-light-text dark:text-dark-text truncate max-w-[70%]">
+    <div class="h-full flex flex-col bg-[var(--techwave-site-bg-color)]">
+      <div class="p-3 md:p-4 border-b border-[var(--techwave-border-color)] flex items-center justify-between bg-[var(--techwave-header-bg-color)]">
+        <h2 class="text-lg font-medium text-[var(--techwave-heading-color)] truncate max-w-[70%]">
           {{ currentChatTitle }}
         </h2>
         <app-button variant="ghost" size="sm" (onClick)="onThemeToggle()" class="ml-auto">
@@ -26,9 +26,9 @@ import { Message } from '../../models/interfaces';
       
       <div #messagesContainer class="flex-1 overflow-y-auto scrollbar-thin">
         <div *ngIf="!currentChat || currentChat.messages.length === 0" class="flex flex-col items-center justify-center h-full px-4 text-center">
-          <div class="py-8 px-4 rounded-lg bg-light-card dark:bg-dark-card max-w-md">
-            <h3 class="text-xl font-semibold text-light-text dark:text-dark-text mb-2">Welcome to AI Chat</h3>
-            <p class="text-gray-600 dark:text-gray-400">
+          <div class="py-8 px-6 rounded-lg bg-[var(--techwave-some-r-bg-color)] max-w-md border border-[var(--techwave-border-color)]">
+            <h3 class="text-xl font-semibold text-[var(--techwave-heading-color)] mb-4">Welcome to AI Chat</h3>
+            <p class="text-[var(--techwave-body-color)]">
               Start a conversation with the AI assistant. 
               Type a message below to begin.
             </p>
@@ -41,9 +41,9 @@ import { Message } from '../../models/interfaces';
         ></app-message>
       </div>
       
-      <div class="p-3 md:p-4 border-t border-light-border dark:border-dark-border">
+      <div class="p-4 md:p-5 border-t border-[var(--techwave-border-color)] bg-[var(--techwave-header-bg-color)]">
         <div class="max-w-3xl mx-auto">
-          <form (submit)="onSendMessage()" class="flex items-end gap-2">
+          <form (submit)="onSendMessage()" class="flex items-end gap-3">
             <div class="flex-1">
               <app-textarea
                 [(ngModel)]="newMessage"
@@ -63,7 +63,7 @@ import { Message } from '../../models/interfaces';
             </app-button>
           </form>
           
-          <div class="text-xs text-gray-500 mt-2 text-center">
+          <div class="text-xs text-[var(--techwave-body-color)] mt-3 text-center">
             Press Enter to send, Shift+Enter for a new line
           </div>
         </div>

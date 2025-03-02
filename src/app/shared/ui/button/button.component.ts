@@ -21,16 +21,19 @@ import { CommonModule } from '@angular/common';
     }
     
     button {
-      font-family: inherit;
-      font-size: inherit;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border-radius: 0.375rem;
+      font-family: var(--techwave-heading-font-family);
+      font-size: 14px;
+      letter-spacing: .5px;
       font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border-radius: 20px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
+      position: relative;
+      overflow: hidden;
       
       &:disabled {
         opacity: 0.6;
@@ -39,8 +42,44 @@ import { CommonModule } from '@angular/common';
       
       &:focus {
         outline: none;
-        ring: 2px;
-        ring-offset: 2px;
+      }
+      
+      &:hover {
+        box-shadow: 0px 5px 15px var(--techwave-main-color1);
+        opacity: 0.95;
+      }
+      
+      &::before {
+        right: 0;
+        bottom: 0;
+        top: 0;
+        left: 0;
+        position: absolute;
+        color: var(--techwave-main-color1);
+        content: '';
+        opacity: .1;
+        border-radius: 20px;
+        box-shadow: 0px 5px 15px;
+      }
+      
+      &::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 20px;
+        border: 2px solid transparent;
+        background: linear-gradient(270deg, var(--techwave-main-color1), var(--techwave-main-color2), var(--techwave-main-color1), var(--techwave-main-color2));
+        background-size: 300% 300%;
+        animation: animatedgradient 4s ease alternate infinite;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      
+      &:hover::after {
+        opacity: 1;
       }
     }
   `]
@@ -57,17 +96,17 @@ export class ButtonComponent {
   get buttonClasses(): string {
     const baseClasses = 'inline-flex items-center justify-center';
     const variantClasses = {
-      primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
-      secondary: 'bg-light-card dark:bg-dark-card text-light-text dark:text-dark-text hover:bg-light-border dark:hover:bg-dark-border',
-      ghost: 'bg-transparent text-light-text dark:text-dark-text hover:bg-light-card dark:hover:bg-dark-card',
-      outline: 'bg-transparent border border-light-border dark:border-dark-border text-light-text dark:text-dark-text hover:bg-light-card dark:hover:bg-dark-card',
-      danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
+      primary: 'bg-primary-600 text-white',
+      secondary: 'bg-[var(--techwave-some-r-bg-color)] text-[var(--techwave-heading-color)]',
+      ghost: 'bg-transparent text-[var(--techwave-heading-color)]',
+      outline: 'bg-transparent border-2 border-[var(--techwave-border-color)] text-[var(--techwave-heading-color)]',
+      danger: 'bg-red-600 text-white'
     };
 
     const sizeClasses = {
-      sm: 'px-2.5 py-1.5 text-xs',
-      md: 'px-4 py-2 text-sm',
-      lg: 'px-5 py-2.5 text-base'
+      sm: 'px-3 py-1 h-8 text-xs',
+      md: 'px-6 py-2 h-10 text-sm',
+      lg: 'px-8 py-3 h-12 text-base'
     };
 
     const widthClass = this.fullWidth ? 'w-full' : '';

@@ -8,10 +8,10 @@ import { MessageRole } from '../../models/enums';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="py-4 px-4 sm:px-6 w-full" [ngClass]="messageClasses">
-      <div class="flex items-start max-w-4xl mx-auto">
+    <div class="py-5 px-5 sm:px-8 w-full" [ngClass]="messageClasses">
+      <div class="flex items-start max-w-3xl mx-auto">
         <div 
-          class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center mr-3 mt-1"
+          class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-4 mt-1"
           [ngClass]="avatarClasses"
         >
           <span [ngSwitch]="message.role">
@@ -23,26 +23,26 @@ import { MessageRole } from '../../models/enums';
         </div>
         
         <div class="flex-1 overflow-hidden">
-          <div class="flex items-center mb-1">
-            <span class="text-sm font-semibold text-light-text dark:text-dark-text">
+          <div class="flex items-center mb-2">
+            <span class="text-sm font-semibold text-[var(--techwave-heading-color)]">
               {{ roleName }}
             </span>
-            <span class="text-xs text-gray-500 ml-2">
+            <span class="text-xs text-[var(--techwave-body-color)] ml-3">
               {{ message.timestamp | date:'short' }}
             </span>
           </div>
           
           <div 
-            class="prose prose-sm dark:prose-invert max-w-none text-light-text dark:text-dark-text"
+            class="prose prose-sm max-w-none text-[var(--techwave-body-color)]"
             [innerHTML]="formattedContent"
           ></div>
           
-          <div *ngIf="!message.isComplete" class="mt-2">
+          <div *ngIf="!message.isComplete" class="mt-3">
             <div class="inline-block relative h-5 w-16">
               <div class="absolute inset-0 flex items-center justify-start">
-                <div class="h-2 w-2 bg-light-text dark:bg-dark-text rounded-full animate-bounce"></div>
-                <div class="h-2 w-2 bg-light-text dark:bg-dark-text rounded-full animate-bounce ml-1" style="animation-delay: 0.2s"></div>
-                <div class="h-2 w-2 bg-light-text dark:bg-dark-text rounded-full animate-bounce ml-1" style="animation-delay: 0.4s"></div>
+                <div class="h-2 w-2 bg-[var(--techwave-main-color1)] rounded-full animate-bounce"></div>
+                <div class="h-2 w-2 bg-[var(--techwave-main-color1)] rounded-full animate-bounce ml-1" style="animation-delay: 0.2s"></div>
+                <div class="h-2 w-2 bg-[var(--techwave-main-color1)] rounded-full animate-bounce ml-1" style="animation-delay: 0.4s"></div>
               </div>
             </div>
           </div>
@@ -67,8 +67,8 @@ export class MessageComponent {
   get messageClasses(): string {
     const baseClass = 'group border-b';
     const roleSpecificClass = this.message.role === MessageRole.User 
-      ? 'border-light-border dark:border-dark-border'
-      : 'bg-light-card dark:bg-dark-card border-light-border dark:border-dark-border';
+      ? 'border-[var(--techwave-border-color)]'
+      : 'bg-[var(--techwave-some-r-bg-color)] border-[var(--techwave-border-color)]';
       
     return `${baseClass} ${roleSpecificClass}`;
   }
@@ -76,15 +76,15 @@ export class MessageComponent {
   get avatarClasses(): string {
     switch (this.message.role) {
       case MessageRole.User:
-        return 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200';
+        return 'bg-[var(--techwave-main-color)] text-white';
       case MessageRole.Assistant:
-        return 'bg-light-card dark:bg-dark-card text-light-text dark:text-dark-text border border-light-border dark:border-dark-border';
+        return 'bg-[var(--techwave-some-a-bg-color)] text-[var(--techwave-heading-color)] border border-[var(--techwave-border-color)]';
       case MessageRole.System:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+        return 'bg-[var(--techwave-some-r-bg-color)] text-[var(--techwave-heading-color)]';
       case MessageRole.Thinking:
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+        return 'bg-[var(--techwave-main-color2)] text-white';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+        return 'bg-[var(--techwave-some-r-bg-color)] text-[var(--techwave-heading-color)]';
     }
   }
   

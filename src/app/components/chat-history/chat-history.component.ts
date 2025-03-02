@@ -10,48 +10,48 @@ import { ButtonComponent } from '../../shared/ui/button/button.component';
   standalone: true,
   imports: [CommonModule, ButtonComponent],
   template: `
-    <div class="h-full flex flex-col bg-light-surface dark:bg-dark-surface border-l border-light-border dark:border-dark-border">
-      <div class="p-4 border-b border-light-border dark:border-dark-border">
-        <h2 class="text-lg font-medium text-light-text dark:text-dark-text">Chat History</h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
+    <div class="h-full flex flex-col bg-[var(--techwave-some-r-bg-color)]">
+      <div class="p-4 border-b border-[var(--techwave-border-color)]">
+        <h2 class="text-lg font-medium text-[var(--techwave-heading-color)]">Chat History</h2>
+        <p class="text-sm text-[var(--techwave-body-color)]">
           Previous conversations
         </p>
       </div>
       
-      <div class="p-4 border-b border-light-border dark:border-dark-border">
+      <div class="p-4 border-b border-[var(--techwave-border-color)]">
         <app-button variant="primary" [fullWidth]="true" (onClick)="onNewChat()">
           New Chat
         </app-button>
       </div>
       
       <div class="flex-1 overflow-y-auto scrollbar-thin">
-        <div *ngIf="chatHistory.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+        <div *ngIf="chatHistory.length === 0" class="text-center py-8 text-[var(--techwave-body-color)] text-sm">
           <p>No chat history</p>
           <p class="mt-2">Start a new conversation</p>
         </div>
         
-        <div *ngIf="chatHistory.length > 0" class="space-y-1 p-2">
+        <div *ngIf="chatHistory.length > 0" class="space-y-2 p-3">
           <button
             *ngFor="let chat of chatHistory"
-            class="w-full text-left py-2 px-3 rounded-lg hover:bg-light-card dark:hover:bg-dark-card text-sm transition-colors"
-            [class.bg-light-card]="currentChatId === chat.id && !themeService.isDarkMode()"
-            [class.bg-dark-card]="currentChatId === chat.id && themeService.isDarkMode()"
-            [class.text-primary-600]="currentChatId === chat.id"
+            class="w-full text-left py-3 px-4 rounded-lg hover:bg-[var(--techwave-some-a-bg-color)] text-sm transition-colors border border-transparent"
+            [class.bg-[var(--techwave-some-a-bg-color)]="currentChatId === chat.id"
+            [class.border-[var(--techwave-main-color)]="currentChatId === chat.id"
+            [class.text-[var(--techwave-heading-color)]="currentChatId === chat.id"
             [class.font-medium]="currentChatId === chat.id"
             (click)="onSelectChat(chat.id)"
           >
             <div class="flex items-center justify-between">
               <span class="truncate max-w-[180px]">{{ chat.title }}</span>
-              <span class="text-xs text-gray-500">{{ chat.messages.length }}</span>
+              <span class="text-xs text-[var(--techwave-body-color)] bg-[var(--techwave-button-bg-color)] px-2 py-1 rounded-full">{{ chat.messages.length }}</span>
             </div>
-            <div class="text-xs text-gray-500 mt-1">
+            <div class="text-xs text-[var(--techwave-body-color)] mt-1">
               {{ chat.updatedAt | date:'short' }}
             </div>
           </button>
         </div>
       </div>
       
-      <div class="p-3 border-t border-light-border dark:border-dark-border">
+      <div class="p-4 border-t border-[var(--techwave-border-color)]">
         <app-button 
           variant="outline" 
           size="sm" 
