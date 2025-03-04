@@ -11,7 +11,7 @@ import { ChatHistoryComponent } from '../chat-history/chat-history.component';
   template: `
     <div class="flex h-full overflow-hidden">
       <!-- Left Sidebar - Thinking -->
-      <div class="w-72 hidden lg:block border-r border-[var(--techwave-border-color)] bg-[var(--techwave-some-r-bg-color)]">
+      <div class="w-[30%] hidden lg:block border-r border-[var(--techwave-border-color)] bg-[var(--techwave-some-r-bg-color)]">
         <app-thinking-panel></app-thinking-panel>
       </div>
       
@@ -52,7 +52,7 @@ import { ChatHistoryComponent } from '../chat-history/chat-history.component';
         *ngIf="mobileView === 'thinking'" 
         class="fixed inset-0 z-50 lg:hidden bg-black bg-opacity-50"
       >
-        <div class="absolute left-0 top-0 h-full w-5/6 max-w-sm bg-[var(--techwave-some-r-bg-color)] transform transition-transform duration-300 ease-in-out shadow-xl">
+        <div class="absolute left-0 top-0 h-full w-[80%] max-w-md bg-[var(--techwave-some-r-bg-color)] transform transition-transform duration-300 ease-in-out shadow-xl">
           <div class="flex justify-between items-center p-4 border-b border-[var(--techwave-border-color)]">
             <h2 class="text-lg font-medium text-[var(--techwave-heading-color)]">Thinking Process</h2>
             <button 
@@ -74,7 +74,7 @@ import { ChatHistoryComponent } from '../chat-history/chat-history.component';
       >
         <div class="absolute right-0 top-0 h-full w-5/6 max-w-sm bg-[var(--techwave-some-r-bg-color)] transform transition-transform duration-300 ease-in-out shadow-xl">
           <div class="flex justify-between items-center p-4 border-b border-[var(--techwave-border-color)]">
-            <h2 class="text-lg font-medium text-[var(--techwave-heading-color)]">Chat History</h2>
+            <h2 class="text-lg font-medium text-[var(--techwave-heading-color)]">Previous Chats</h2>
             <button 
               class="p-2 rounded-full text-[var(--techwave-heading-color)] hover:bg-[var(--techwave-some-a-bg-color)]"
               (click)="closeMobileView()"
@@ -100,7 +100,7 @@ export class ChatLayoutComponent {
   mobileView: 'chat' | 'thinking' | 'history' = 'chat';
   
   toggleMobileView(view: 'thinking' | 'history'): void {
-    this.mobileView = view;
+    this.mobileView = this.mobileView === view ? 'chat' : view;
   }
   
   closeMobileView(): void {

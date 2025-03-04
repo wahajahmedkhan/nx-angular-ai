@@ -16,7 +16,10 @@ export enum ChunkType {
   Content = 'content',
   End = 'end',
   Error = 'error',
-  Thinking = 'thinking'
+  Thinking = 'thinking',
+  SourceDocuments = 'sourceDocuments',
+  AgentReasoning = 'agentReasoning',
+  NextAgent = 'nextAgent'
 }
 
 export enum ChatViewType {

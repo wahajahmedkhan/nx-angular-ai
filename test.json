@@ -1,0 +1,120 @@
+{
+  "text": "I'm here to provide insights from a secular or culturally diverse perspective on any questions you might have. If there's anything specific you'd like to know or discuss, feel free to let me know!",
+  "question": "Hey, how are you?",
+  "chatId": "95c44479-02e5-4597-9135-54d06fca297c",
+  "chatMessageId": "b0053057-a005-4f95-9be1-6b626f190b8a",
+  "sessionId": "95c44479-02e5-4597-9135-54d06fca297c",
+  "agentReasoning": [
+    {
+      "agentName": "Moderator",
+      "messages": [],
+      "next": "composer",
+      "instructions": "Respond to the user's greeting.",
+      "usedTools": [],
+      "sourceDocuments": [],
+      "artifacts": [],
+      "state": {
+        "next": "composer",
+        "instructions": "Respond to the user's greeting.",
+        "team_members": "composer, muslim_perspective__________, non_muslim_perspective"
+      },
+      "nodeId": ""
+    },
+    {
+      "agentName": "Composer",
+      "messages": [
+        "I'm here to assist you with any questions or information you need. How can I help you today?"
+      ],
+      "usedTools": [
+        null
+      ],
+      "sourceDocuments": [
+        null
+      ],
+      "artifacts": [
+        null
+      ],
+      "state": {},
+      "nodeId": "worker_2"
+    },
+    {
+      "agentName": "Moderator",
+      "messages": [],
+      "next": "muslim_perspective__________",
+      "instructions": "Please provide insights, responses, or information related to the user’s current inquiry or general interactions as per a Muslim perspective.",
+      "usedTools": [],
+      "sourceDocuments": [],
+      "artifacts": [],
+      "state": {
+        "next": "muslim_perspective__________",
+        "instructions": "Please provide insights, responses, or information related to the user’s current inquiry or general interactions as per a Muslim perspective.",
+        "team_members": "composer, muslim_perspective__________, non_muslim_perspective"
+      },
+      "nodeId": ""
+    },
+    {
+      "agentName": "Muslim_Perspective          ",
+      "messages": [
+        "If you have any questions or topics you'd like to explore, especially related to psychological insights from an Islamic perspective, feel free to ask! I'm here to help."
+      ],
+      "usedTools": [
+        null
+      ],
+      "sourceDocuments": [
+        null
+      ],
+      "artifacts": [
+        null
+      ],
+      "state": {},
+      "nodeId": "worker_0"
+    },
+    {
+      "agentName": "Moderator",
+      "messages": [],
+      "next": "non_muslim_perspective",
+      "instructions": "Introduce yourself and explain what insights or assistance you can offer from a non-Muslim perspective. This will help the user frame their questions or requests for information better.",
+      "usedTools": [],
+      "sourceDocuments": [],
+      "artifacts": [],
+      "state": {
+        "next": "non_muslim_perspective",
+        "instructions": "Introduce yourself and explain what insights or assistance you can offer from a non-Muslim perspective. This will help the user frame their questions or requests for information better.",
+        "team_members": "composer, muslim_perspective__________, non_muslim_perspective"
+      },
+      "nodeId": ""
+    },
+    {
+      "agentName": "Non_Muslim_Perspective",
+      "messages": [
+        "I'm here to provide insights from a secular or culturally diverse perspective on any questions you might have. If there's anything specific you'd like to know or discuss, feel free to let me know!"
+      ],
+      "usedTools": [
+        null
+      ],
+      "sourceDocuments": [
+        null
+      ],
+      "artifacts": [
+        null
+      ],
+      "state": {},
+      "nodeId": "worker_1"
+    },
+    {
+      "agentName": "Moderator",
+      "messages": [],
+      "next": "FINISH",
+      "instructions": "No further instructions as the task should be finished.",
+      "usedTools": [],
+      "sourceDocuments": [],
+      "artifacts": [],
+      "state": {
+        "next": "FINISH",
+        "instructions": "No further instructions as the task should be finished.",
+        "team_members": "composer, muslim_perspective__________, non_muslim_perspective"
+      },
+      "nodeId": ""
+    }
+  ]
+}

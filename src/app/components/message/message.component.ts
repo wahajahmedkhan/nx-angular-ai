@@ -1,14 +1,17 @@
-import { Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, SecurityContext, ChangeDetectorRef, OnChanges, SimpleChanges, OnInit } from '@angular/core';
+import { CommonModule, DatePipe } from '@angular/common';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Message } from '../../models/interfaces';
 import { MessageRole } from '../../models/enums';
+import { marked } from 'marked';
+import * as hljs from 'highlight.js';
 
 @Component({
   selector: 'app-message',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, DatePipe],
   template: `
-    <div class="py-5 px-5 sm:px-8 w-full" [ngClass]="messageClasses">
+    <div [ngClass]="messageClasses" class="py-5 px-5 sm:px-8 w-full">
       <div class="flex items-start max-w-3xl mx-auto">
         <div 
           class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center mr-4 mt-1"
@@ -17,32 +20,78 @@ import { MessageRole } from '../../models/enums';
           <span [ngSwitch]="message.role">
             <span *ngSwitchCase="'user'" class="text-sm font-semibold">U</span>
             <span *ngSwitchCase="'assistant'" class="text-sm font-semibold">A</span>
-            <span *ngSwitchCase="'system'" class="text-sm font-semibold">S</span>
-            <span *ngSwitchDefault class="text-sm font-semibold">?</span>
+            <span *ngSwitchDefault class="text-sm font-semibold">S</span>
           </span>
         </div>
         
-        <div class="flex-1 overflow-hidden">
-          <div class="flex items-center mb-2">
-            <span class="text-sm font-semibold text-[var(--techwave-heading-color)]">
-              {{ roleName }}
-            </span>
-            <span class="text-xs text-[var(--techwave-body-color)] ml-3">
+        <div class="flex-1 space-y-2">
+          <div class="flex items-center">
+            <span class="font-medium text-[var(--techwave-heading-color)]">{{ roleName }}</span>
+            <span class="text-xs text-[var(--techwave-muted-color)] ml-2">
               {{ message.timestamp | date:'short' }}
             </span>
           </div>
           
+          <!-- For user messages or completed AI messages -->
           <div 
+            *ngIf="message.role === 'user' || (message.isComplete && !isErrorMessage && !hasAgentReasoning && !hasNextAgent)" 
             class="prose prose-sm max-w-none text-[var(--techwave-body-color)]"
-            [innerHTML]="formattedContent"
+            [innerHTML]="renderedContent"
           ></div>
           
-          <div *ngIf="!message.isComplete" class="mt-3">
-            <div class="inline-block relative h-5 w-16">
-              <div class="absolute inset-0 flex items-center justify-start">
-                <div class="h-2 w-2 bg-[var(--techwave-main-color1)] rounded-full animate-bounce"></div>
-                <div class="h-2 w-2 bg-[var(--techwave-main-color1)] rounded-full animate-bounce ml-1" style="animation-delay: 0.2s"></div>
-                <div class="h-2 w-2 bg-[var(--techwave-main-color1)] rounded-full animate-bounce ml-1" style="animation-delay: 0.4s"></div>
+          <!-- For error messages -->
+          <div 
+            *ngIf="message.role === 'assistant' && isErrorMessage" 
+            class="prose prose-sm max-w-none bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 text-red-700 dark:text-red-300"
+          >
+            <div class="flex items-start">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+              <div>
+                <p class="font-medium mb-1">Connection Error</p>
+                <p class="text-sm" [innerHTML]="renderedContent"></p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- For AI messages that are still streaming -->
+          <div *ngIf="message.role === 'assistant' && !message.isComplete && !isErrorMessage && !hasAgentReasoning && !hasNextAgent">
+            <div 
+              class="prose prose-sm max-w-none text-[var(--techwave-body-color)]"
+              [innerHTML]="renderedContent"
+            ></div>
+            
+            <!-- Typing animation -->
+            <div *ngIf="isLastMessage" class="typing-animation mt-1">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          
+          <!-- For agent reasoning messages -->
+          <div *ngIf="hasAgentReasoning" class="prose prose-sm max-w-none bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-md p-4 text-indigo-700 dark:text-indigo-300">
+            <div class="flex items-start">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+              </svg>
+              <div>
+                <p class="font-medium mb-1">Agent Reasoning</p>
+                <div class="text-sm" [innerHTML]="renderedContent"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- For next agent messages -->
+          <div *ngIf="hasNextAgent" class="prose prose-sm max-w-none bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md p-4 text-purple-700 dark:text-purple-300">
+            <div class="flex items-start">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+              </svg>
+              <div>
+                <p class="font-medium mb-1">Next Agent</p>
+                <div class="text-sm" [innerHTML]="renderedContent"></div>
               </div>
             </div>
           </div>
@@ -53,47 +102,158 @@ import { MessageRole } from '../../models/enums';
   styles: [`
     :host {
       display: block;
-      width: 100%;
     }
     
-    .prose {
-      white-space: pre-line;
+    /* Animation delay utilities */
+    .animation-delay-200 {
+      animation-delay: 200ms;
+    }
+    
+    .animation-delay-400 {
+      animation-delay: 400ms;
+    }
+    
+    /* Ensure code blocks look good */
+    :host ::ng-deep pre {
+      background-color: var(--techwave-code-bg-color);
+      border-radius: 0.375rem;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+    
+    :host ::ng-deep code {
+      font-family: monospace;
+      background-color: var(--techwave-code-bg-color);
+      padding: 0.125rem 0.25rem;
+      border-radius: 0.25rem;
+    }
+    
+    :host ::ng-deep pre code {
+      padding: 0;
+      background-color: transparent;
+    }
+    
+    .typing-animation {
+      display: flex;
+      justify-content: space-between;
+      width: 60px;
+    }
+    
+    .typing-animation span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--techwave-body-color);
+      animation: typing 1.5s infinite;
+    }
+    
+    .typing-animation span:nth-child(2) {
+      animation-delay: 200ms;
+    }
+    
+    .typing-animation span:nth-child(3) {
+      animation-delay: 400ms;
+    }
+    
+    @keyframes typing {
+      0% {
+        opacity: 0.2;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0.2;
+      }
     }
   `]
 })
-export class MessageComponent {
+export class MessageComponent implements OnInit, OnChanges {
   @Input() message!: Message;
+  @Input() isLastMessage = false;
+  
+  // Property to store cached content
+  private _cachedContent: SafeHtml | null = null;
+  private _lastContent: string = '';
+  
+  constructor(
+    private sanitizer: DomSanitizer,
+    private cdr: ChangeDetectorRef
+  ) {
+    // Configure marked for streaming content
+    marked.setOptions({
+      gfm: true,
+      breaks: true
+    });
+  }
+  
+  ngOnInit(): void {
+  }
+  
+  ngOnChanges(changes: SimpleChanges): void {
+    // Check if message content has changed
+    if (changes['message'] && 
+        this.message && 
+        this._lastContent !== this.message.content) {
+      console.log('Message content changed:', this.message.content);
+      console.log('Message isComplete:', this.message.isComplete);
+      this._lastContent = this.message.content;
+      this._cachedContent = null; // Reset cache to force re-render
+      this.cdr.detectChanges(); // Trigger change detection
+    }
+    
+    // Also check if isComplete has changed
+    if (changes['message'] && 
+        this.message && 
+        changes['message'].previousValue && 
+        changes['message'].previousValue.isComplete !== this.message.isComplete) {
+      console.log('Message isComplete changed:', this.message.isComplete);
+      this.cdr.detectChanges(); // Trigger change detection
+    }
+  }
   
   get messageClasses(): string {
-    const baseClass = 'group border-b';
-    const roleSpecificClass = this.message.role === MessageRole.User 
-      ? 'border-[var(--techwave-border-color)]'
-      : 'bg-[var(--techwave-some-r-bg-color)] border-[var(--techwave-border-color)]';
-      
-    return `${baseClass} ${roleSpecificClass}`;
+    const baseClasses = '';
+    
+    switch (this.message.role) {
+      case MessageRole.User:
+        return `${baseClasses} bg-[var(--techwave-user-msg-bg-color)]`;
+      case MessageRole.Assistant:
+        return `${baseClasses} bg-[var(--techwave-assistant-msg-bg-color)]`;
+      default:
+        return `${baseClasses} bg-[var(--techwave-system-msg-bg-color)]`;
+    }
   }
   
   get avatarClasses(): string {
+    const baseClasses = 'text-white';
+    
+    // Special case for error messages
+    if (this.message.role === MessageRole.Assistant && this.isErrorMessage) {
+      return `${baseClasses} bg-red-600`;
+    }
+    
     switch (this.message.role) {
       case MessageRole.User:
-        return 'bg-[var(--techwave-main-color)] text-white';
+        return `${baseClasses} bg-blue-600`;
       case MessageRole.Assistant:
-        return 'bg-[var(--techwave-some-a-bg-color)] text-[var(--techwave-heading-color)] border border-[var(--techwave-border-color)]';
-      case MessageRole.System:
-        return 'bg-[var(--techwave-some-r-bg-color)] text-[var(--techwave-heading-color)]';
-      case MessageRole.Thinking:
-        return 'bg-[var(--techwave-main-color2)] text-white';
+        return `${baseClasses} bg-purple-600`;
       default:
-        return 'bg-[var(--techwave-some-r-bg-color)] text-[var(--techwave-heading-color)]';
+        return `${baseClasses} bg-gray-600`;
     }
   }
   
   get roleName(): string {
+    // Special case for error messages
+    if (this.message.role === MessageRole.Assistant && this.isErrorMessage) {
+      return 'Error';
+    }
+    
     switch (this.message.role) {
       case MessageRole.User:
         return 'You';
       case MessageRole.Assistant:
-        return 'AI Assistant';
+        return 'Assistant';
       case MessageRole.System:
         return 'System';
       case MessageRole.Thinking:
@@ -103,12 +263,77 @@ export class MessageComponent {
     }
   }
   
-  get formattedContent(): string {
-    // Here we would typically use a markdown parser or sanitize content
-    // For this example we'll just handle basic formatting
-    return this.message.content
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+  get isErrorMessage(): boolean {
+    if (!this.message.content) return false;
+    
+    return (
+      this.message.role === MessageRole.Assistant &&
+      (
+        this.message.content.includes('Unable to connect to the AI service') ||
+        this.message.content.includes('Error:') ||
+        this.message.content.includes('ENOTFOUND') ||
+        this.message.content.includes('Network error') ||
+        this.message.content.includes('timed out') ||
+        this.message.content.includes('AI service error')
+      )
+    );
+  }
+  
+  get hasAgentReasoning(): boolean {
+    if (!this.message.content) return false;
+    
+    return (
+      this.message.role === MessageRole.Assistant &&
+      (
+        this.message.content.includes('**Agent:') ||
+        this.message.content.includes('**Thought Process:**') ||
+        this.message.content.includes('**Action:**') ||
+        this.message.content.includes('**Observation:**')
+      )
+    );
+  }
+  
+  get hasNextAgent(): boolean {
+    if (!this.message.content) return false;
+    
+    return (
+      this.message.role === MessageRole.Assistant &&
+      this.message.content.includes('Processing with')
+    );
+  }
+  
+  get renderedContent(): SafeHtml {
+    // If content is empty, return empty string
+    if (!this.message.content || this.message.content.trim() === '') {
+      return this.sanitizer.bypassSecurityTrustHtml('');
+    }
+    
+    // Use cached content if available
+    if (this._cachedContent) {
+      return this._cachedContent;
+    }
+    
+    // Process the content with marked
+    let html = '';
+    try {
+      html = marked.parse(this.message.content) as string;
+      
+      // Apply syntax highlighting to code blocks
+      html = html.replace(/<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g, (match, language, code) => {
+        try {
+          // Basic syntax highlighting without using highlight.js API
+          return `<pre><code class="language-${language} hljs">${code}</code></pre>`;
+        } catch (e) {
+          return match; // If highlighting fails, return the original match
+        }
+      });
+      
+      // Cache the result
+      this._cachedContent = this.sanitizer.bypassSecurityTrustHtml(html);
+      return this._cachedContent;
+    } catch (error) {
+      console.error('Error parsing markdown:', error);
+      return this.sanitizer.bypassSecurityTrustHtml(`<p>${this.message.content}</p>`);
+    }
   }
 }

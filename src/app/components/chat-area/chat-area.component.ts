@@ -1,70 +1,66 @@
-import { Component, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, ChangeDetectorRef, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { ThemeService } from '../../services/theme.service';
 import { MessageComponent } from '../message/message.component';
-import { ButtonComponent } from '../../shared/ui/button/button.component';
-import { TextareaComponent } from '../../shared/ui/textarea/textarea.component';
-import { Message } from '../../models/interfaces';
+import { Chat, Message } from '../../models/interfaces';
 
 @Component({
   selector: 'app-chat-area',
   standalone: true,
-  imports: [CommonModule, FormsModule, MessageComponent, ButtonComponent, TextareaComponent],
+  imports: [CommonModule, FormsModule, MessageComponent],
   template: `
-    <div class="h-full flex flex-col bg-[var(--techwave-site-bg-color)]">
-      <div class="p-3 md:p-4 border-b border-[var(--techwave-border-color)] flex items-center justify-between bg-[var(--techwave-header-bg-color)]">
-        <h2 class="text-lg font-medium text-[var(--techwave-heading-color)] truncate max-w-[70%]">
-          {{ currentChatTitle }}
-        </h2>
-        <app-button variant="ghost" size="sm" (onClick)="onThemeToggle()" class="ml-auto">
-          <span *ngIf="themeService.isDarkMode()">🌞</span>
-          <span *ngIf="!themeService.isDarkMode()">🌙</span>
-        </app-button>
-      </div>
-      
-      <div #messagesContainer class="flex-1 overflow-y-auto scrollbar-thin">
-        <div *ngIf="!currentChat || currentChat.messages.length === 0" class="flex flex-col items-center justify-center h-full px-4 text-center">
-          <div class="py-8 px-6 rounded-lg bg-[var(--techwave-some-r-bg-color)] max-w-md border border-[var(--techwave-border-color)]">
-            <h3 class="text-xl font-semibold text-[var(--techwave-heading-color)] mb-4">Welcome to AI Chat</h3>
-            <p class="text-[var(--techwave-body-color)]">
-              Start a conversation with the AI assistant. 
-              Type a message below to begin.
-            </p>
+    <div class="h-full flex flex-col">
+      <!-- Messages container -->
+      <div 
+        class="flex-1 overflow-y-auto p-4 scrollbar-thin" 
+        #messagesContainer
+      >
+        <div class="max-w-4xl mx-auto">
+          <div *ngIf="!currentChat?.messages?.length" class="flex flex-col items-center justify-center h-full text-center p-4">
+            <h2 class="text-xl font-bold mb-2 text-[var(--techwave-heading-color)]">Start a new conversation</h2>
+            <p class="text-[var(--techwave-body-color)] mb-6">Ask a question to begin chatting with the AI assistant</p>
+          </div>
+          
+          <div *ngIf="currentChat?.messages?.length" class="space-y-6">
+            <app-message 
+              *ngFor="let message of currentChat?.messages" 
+              [message]="message"
+              [isLastMessage]="isLastMessage(message)"
+            ></app-message>
           </div>
         </div>
-        
-        <app-message
-          *ngFor="let message of currentChat?.messages"
-          [message]="message"
-        ></app-message>
       </div>
       
-      <div class="p-4 md:p-5 border-t border-[var(--techwave-border-color)] bg-[var(--techwave-header-bg-color)]">
-        <div class="max-w-3xl mx-auto">
-          <form (submit)="onSendMessage()" class="flex items-end gap-3">
-            <div class="flex-1">
-              <app-textarea
-                [(ngModel)]="newMessage"
-                name="message"
-                [placeholder]="'Type a message...'"
-                [rows]="1"
-                [maxHeight]="'120px'"
-                [autoResize]="true"
-              ></app-textarea>
-            </div>
-            <app-button
-              type="submit"
-              [disabled]="!newMessage.trim()"
-              variant="primary"
+      <!-- Input area -->
+      <div class="p-4 border-t border-[var(--techwave-border-color)]">
+        <div class="max-w-4xl mx-auto">
+          <div class="relative">
+            <textarea
+              #messageInput
+              class="w-full p-3 pr-12 bg-[var(--techwave-input-bg-color)] border border-[var(--techwave-border-color)] rounded-lg text-[var(--techwave-input-text-color)] placeholder-[var(--techwave-placeholder-color)] focus:outline-none focus:ring-2 focus:ring-[var(--techwave-primary-color)] focus:border-transparent resize-none"
+              placeholder="Type your message here..."
+              rows="2"
+              [disabled]="isLoading"
+              (keydown.enter)="onEnterKey($event)"
+              [(ngModel)]="newMessage"
+            ></textarea>
+            
+            <button 
+              class="absolute right-3 bottom-3 text-[var(--techwave-primary-color)] hover:text-[var(--techwave-primary-hover-color)] disabled:opacity-50 disabled:cursor-not-allowed"
+              [disabled]="isLoading || !newMessage.trim()"
+              (click)="sendMessage(newMessage); newMessage = ''; messageInput.focus()"
             >
-              Send
-            </app-button>
-          </form>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
           
-          <div class="text-xs text-[var(--techwave-body-color)] mt-3 text-center">
-            Press Enter to send, Shift+Enter for a new line
+          <div *ngIf="isLoading" class="mt-2 text-sm text-[var(--techwave-body-color)]">
+            AI is thinking...
           </div>
         </div>
       </div>
@@ -75,30 +71,136 @@ import { Message } from '../../models/interfaces';
       display: block;
       height: 100%;
     }
+    
+    /* Animation delay utilities */
+    .animation-delay-200 {
+      animation-delay: 200ms;
+    }
+    
+    .animation-delay-400 {
+      animation-delay: 400ms;
+    }
   `]
 })
-export class ChatAreaComponent implements OnInit, AfterViewChecked {
+export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
   currentChat: { messages: Message[], title: string } | null = null;
   newMessage = '';
   shouldScrollToBottom = false;
+  isLoading = false;
+  private subscription = new Subscription();
   
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
   
   constructor(
     private chatService: ChatService,
+    private cdr: ChangeDetectorRef,
     public themeService: ThemeService
-  ) {}
-  
-  ngOnInit(): void {
-    // Watch the current chat signal
-    this.currentChat = this.chatService.currentChat();
-    
-    // Subscribe to message chunks to trigger scroll on new content
-    this.chatService.messageChunks$.subscribe(chunk => {
-      if (chunk.type === 'content') {
+  ) {
+    // Use effect to react to changes in the current chat
+    effect(() => {
+      this.currentChat = this.chatService.currentChat();
+      if (this.currentChat) {
         this.shouldScrollToBottom = true;
       }
     });
+  }
+  
+  ngOnInit(): void {
+    // Subscribe to message chunks to trigger scroll on new content and update loading state
+    this.subscription.add(
+      this.chatService.messageChunks$.subscribe(chunk => {
+        console.log('Received message chunk:', chunk.type, chunk);
+        
+        if (chunk.type === 'start') {
+          console.log('Setting isLoading to true');
+          this.isLoading = true;
+        } else if (chunk.type === 'end' || chunk.type === 'error') {
+          console.log('Stream ended or error occurred, setting isLoading to false');
+          this.isLoading = false;
+          
+          // Force update of current chat to ensure message is marked as complete
+          this.currentChat = { ...this.chatService.currentChat()! };
+          
+          // Scroll to bottom when stream ends
+          this.shouldScrollToBottom = true;
+          
+          // Force change detection to ensure UI updates
+          this.cdr.detectChanges();
+        } else if (chunk.type === 'content') {
+          this.shouldScrollToBottom = true;
+        } else if (chunk.type === 'agentReasoning') {
+          // Handle agent reasoning events
+          console.log('Received agent reasoning:', chunk.content);
+          this.shouldScrollToBottom = true;
+        } else if (chunk.type === 'nextAgent') {
+          // Handle next agent events
+          console.log('Received next agent:', chunk.content);
+          this.shouldScrollToBottom = true;
+        }
+      })
+    );
+    
+    // Add a safety check to ensure loading state is reset if something goes wrong
+    // Create an interval and store its ID
+    const intervalId = setInterval(() => {
+      if (this.isLoading) {
+        const lastMessageTime = this.getLastMessageTime();
+        const currentTime = new Date().getTime();
+        
+        // If the last message was more than 30 seconds ago and we're still loading,
+        // assume something went wrong and reset the loading state
+        if (lastMessageTime && (currentTime - lastMessageTime) > 30000) {
+          console.log('Loading state appears to be stuck, resetting...');
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        }
+      }
+    }, 10000);
+    
+    // Add the clearInterval function to the subscription for cleanup
+    this.subscription.add(() => {
+      clearInterval(intervalId);
+    });
+  }
+  
+  // Helper method to get the timestamp of the last message
+  private getLastMessageTime(): number | null {
+    if (!this.currentChat?.messages || this.currentChat.messages.length === 0) {
+      return null;
+    }
+    
+    const lastMessage = this.currentChat.messages[this.currentChat.messages.length - 1];
+    return lastMessage.timestamp ? new Date(lastMessage.timestamp).getTime() : null;
+  }
+  
+  ngOnDestroy(): void {
+    // Clear all subscriptions
+    this.subscription.unsubscribe();
+    
+    // Ensure loading state is reset when component is destroyed
+    if (this.isLoading) {
+      console.log('Component being destroyed while loading, resetting loading state');
+      this.isLoading = false;
+      
+      // If there's an active chat, update it to ensure any in-progress messages are marked as complete
+      if (this.currentChat && this.currentChat.messages && this.currentChat.messages.length > 0) {
+        const lastMessage = this.currentChat.messages[this.currentChat.messages.length - 1];
+        if (lastMessage && !lastMessage.isComplete) {
+          console.log('Marking incomplete message as complete on component destroy');
+          // We can't directly call updateMessage since it's private
+          // Instead, send a new message to trigger the end of the current one
+          this.sendMessage('');
+        }
+      }
+    }
+  }
+  
+  scrollToBottom(): void {
+    try {
+      this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
+    } catch (err) {
+      console.error('Error scrolling to bottom:', err);
+    }
   }
   
   ngAfterViewChecked(): void {
@@ -108,29 +210,22 @@ export class ChatAreaComponent implements OnInit, AfterViewChecked {
     }
   }
   
-  get currentChatTitle(): string {
-    return this.currentChat?.title || 'New Chat';
+  isLastMessage(message: Message): boolean {
+    return message === this.currentChat?.messages[this.currentChat.messages.length - 1];
   }
   
-  onSendMessage(): void {
-    if (!this.newMessage.trim()) return;
-    
-    this.chatService.sendMessage(this.newMessage);
-    this.newMessage = '';
-    this.shouldScrollToBottom = true;
-  }
-  
-  onThemeToggle(): void {
-    // Use theme service to toggle theme
-    this.themeService.toggleTheme();
-  }
-  
-  private scrollToBottom(): void {
-    try {
-      const container = this.messagesContainer.nativeElement;
-      container.scrollTop = container.scrollHeight;
-    } catch (err) {
-      console.error('Error scrolling to bottom:', err);
+  onEnterKey(event: any): void {
+    if (event.shiftKey) return;
+    event.preventDefault();
+    if (this.newMessage.trim()) {
+      this.sendMessage(this.newMessage);
+      this.newMessage = '';
     }
+  }
+  
+  sendMessage(message: string): void {
+    if (!message.trim()) return;
+    this.chatService.sendMessage(message);
+    this.shouldScrollToBottom = true;
   }
 }
