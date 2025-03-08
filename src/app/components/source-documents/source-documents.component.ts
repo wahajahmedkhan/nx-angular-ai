@@ -22,7 +22,7 @@ import { SourceDocument } from '../../models/interfaces';
             class="px-3 py-1.5 bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100 rounded-full text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
             [title]="getFullTitle(doc)"
             tabindex="0"
-            aria-label="View source document: {{ getFullTitle(doc) }}"
+            [attr.aria-label]="'View source document: ' + getFullTitle(doc)"
           >
             {{ getShortTitle(doc) }}
           </button>
@@ -43,7 +43,9 @@ import { SourceDocument } from '../../models/interfaces';
         <div 
           class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden"
           (click)="$event.stopPropagation()"
+          (keydown)="$event.stopPropagation()"
           role="document"
+          tabindex="0"
         >
           <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
             <h3 id="modalTitle" class="text-lg font-semibold text-gray-900 dark:text-white">{{ getFullTitle(selectedDocument) }}</h3>
@@ -51,7 +53,7 @@ import { SourceDocument } from '../../models/interfaces';
               (click)="closeModal()"
               (keydown.enter)="closeModal()"
               class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              aria-label="Close modal"
+              [attr.aria-label]="'Close modal'"
               tabindex="0"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
