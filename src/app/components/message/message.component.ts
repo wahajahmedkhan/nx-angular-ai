@@ -5,11 +5,13 @@ import { Message } from '../../models/interfaces';
 import { MessageRole } from '../../models/enums';
 import { marked } from 'marked';
 import * as hljs from 'highlight.js';
+import { SourceDocumentsComponent } from '../source-documents/source-documents.component';
+import { ChatService } from '../../services/chat.service';
 
 @Component({
   selector: 'app-message',
   standalone: true,
-  imports: [CommonModule, DatePipe],
+  imports: [CommonModule, DatePipe, SourceDocumentsComponent],
   template: `
     <div [ngClass]="messageClasses" class="py-5 px-5 sm:px-8 w-full">
       <div class="flex items-start max-w-3xl mx-auto">
@@ -38,6 +40,9 @@ import * as hljs from 'highlight.js';
             class="prose prose-sm max-w-none text-[var(--techwave-body-color)]"
             [innerHTML]="renderedContent"
           ></div>
+          
+          <!-- Source Documents (only shown for completed AI messages) -->
+          <app-source-documents *ngIf="message.role === 'assistant' && message.isComplete && !isErrorMessage"></app-source-documents>
           
           <!-- For error messages -->
           <div 
@@ -178,7 +183,8 @@ export class MessageComponent implements OnInit, OnChanges {
   
   constructor(
     private sanitizer: DomSanitizer,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private chatService: ChatService
   ) {
     // Configure marked for streaming content
     marked.setOptions({

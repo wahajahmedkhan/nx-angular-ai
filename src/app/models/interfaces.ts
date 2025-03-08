@@ -17,7 +17,8 @@ export interface Chat {
   updatedAt: Date;
   flowChatId?: string; // Store FlowWise chatId for session continuity
   sessionId?: string; // Store FlowWise sessionId for PostgreSQL agent memory
-  reasoningSteps?: AgentReasoningStep[]; // Store reasoning steps for this chat
+  reasoningSteps?: AgentReasoningStep[];
+  sourceDocuments?: SourceDocument[];
 }
 
 export interface MessageChunk {
@@ -80,4 +81,15 @@ export interface FlowWiseMetadata {
   sessionId: string;
   question?: string;
   memoryType?: string;
+}
+
+export interface SourceDocument {
+  pageContent: string;
+  metadata: Record<string, any>;
+  id: string;
+}
+
+export interface SourceDocumentEvent {
+  event: 'sourceDocuments';
+  data: SourceDocument[];
 }

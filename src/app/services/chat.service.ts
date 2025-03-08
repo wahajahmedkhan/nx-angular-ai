@@ -8,7 +8,8 @@ import {
   FlowWiseResponse, 
   AgentReasoningStep,
   FlowWiseStreamEvent,
-  FlowWiseMetadata
+  FlowWiseMetadata,
+  SourceDocument
 } from '../models/interfaces';
 import { ChunkType, MessageRole } from '../models/enums';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,6 +23,11 @@ export class ChatService {
   private activeChat = signal<Chat | null>(null);
   private messageChunksSubject = new Subject<MessageChunk>();
   private thinkingSubject = new BehaviorSubject<AgentReasoningStep | null>(null);
+  private sourceDocumentsSubject = new BehaviorSubject<SourceDocument[]>([]);
+  
+  // Buffer for collecting source document events
+  private sourceDocumentBuffer: string = '';
+  private isCollectingSourceDocuments: boolean = false;
   
   // API endpoint
   private readonly FLOWWISE_API_URL = 'http://135.181.181.121:3000/api/v1/prediction/a180e12e-d360-47fd-9fbd-443dcc3a5d1d';
@@ -31,6 +37,9 @@ export class ChatService {
   
   // Observable for thinking steps
   public thinking$ = this.thinkingSubject.asObservable();
+  
+  // Observable for source documents
+  public sourceDocuments$ = this.sourceDocumentsSubject.asObservable();
   
   // Computed values
   public currentChat = computed(() => this.activeChat());
@@ -67,7 +76,8 @@ export class ChatService {
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
-      reasoningSteps: [] // Initialize reasoning steps
+      reasoningSteps: [], // Initialize reasoning steps
+      sourceDocuments: [] // Initialize source documents
     };
     
     // Add to chat list
@@ -424,22 +434,28 @@ export class ChatService {
                     }
                   }
                   else if (eventData.event === 'sourceDocuments' && Array.isArray(eventData.data)) {
-                    // Store source documents
-                    sourceDocuments = eventData.data;
-                    
-                    // Send source documents as a message chunk
-                    this.messageChunksSubject.next({
-                      type: ChunkType.SourceDocuments,
-                      content: JSON.stringify(sourceDocuments),
-                      messageId
-                    });
-                    
-                    // Add source documents to the message
-                    if (accumulatedText && sourceDocuments.length > 0) {
-                      const sourceContent = this.formatSourceDocuments(sourceDocuments);
-                      const updatedContent = accumulatedText + '\n\n' + sourceContent;
-                      this.updateMessage(messageId, updatedContent);
-                      accumulatedText = updatedContent;
+                    // Process source documents
+                    const sourceDocuments = eventData.data as SourceDocument[];
+                    if (sourceDocuments.length > 0) {
+                      console.log('Received source documents:', sourceDocuments);
+                      
+                      // Store source documents in the active chat
+                      this.activeChat.update(chat => {
+                        if (!chat) return null;
+                        return {
+                          ...chat,
+                          sourceDocuments: sourceDocuments
+                        };
+                      });
+                      
+                      // Update chats list to persist the source documents
+                      this.updateChatInList();
+                      
+                      // Immediately save to storage to ensure persistence
+                      this.saveChatsToStorage();
+                      
+                      // Emit source documents to subscribers
+                      this.sourceDocumentsSubject.next(sourceDocuments);
                     }
                   }
                   else if (eventData.event === 'agentReasoning' && Array.isArray(eventData.data)) {
@@ -658,6 +674,9 @@ export class ChatService {
    * Process a stream event from FlowWise
    */
   private processStreamEvent(event: FlowWiseStreamEvent, messageId: string, currentText: string): void {
+    let accumulatedText = currentText;
+    
+    // Handle basic event types
     switch (event.event) {
       case 'start':
         // Stream started
@@ -665,11 +684,11 @@ export class ChatService {
           type: ChunkType.Start,
           messageId
         });
-        break;
+        return;
         
       case 'token':
         // Already handled in streamFlowWiseResponse
-        break;
+        return;
         
       case 'error':
         console.error('Stream error:', event.data);
@@ -678,7 +697,7 @@ export class ChatService {
           messageId,
           content: typeof event.data === 'string' ? event.data : 'An error occurred'
         });
-        break;
+        return;
         
       case 'end':
         // Stream ended
@@ -686,18 +705,205 @@ export class ChatService {
           type: ChunkType.End,
           messageId
         });
-        break;
-        
-      case 'sourceDocuments':
-        // Handle source documents if needed
-        console.log('Source documents:', event.data);
-        break;
-        
-      case 'usedTools':
-        // Handle used tools if needed
-        console.log('Used tools:', event.data);
-        break;
+        return;
     }
+    
+    // Handle JSON data events
+    try {
+      if (event.data) {
+        // Check if we're in the middle of collecting source documents
+        if (this.isCollectingSourceDocuments) {
+          // Add to buffer
+          this.sourceDocumentBuffer += event.data;
+          console.log('Collecting more source document data...');
+          
+          // Try to parse the buffer to see if it's complete
+          try {
+            const parsedData = JSON.parse(this.sourceDocumentBuffer);
+            
+            // If we get here, the JSON is valid and complete
+            if (parsedData.event === 'sourceDocuments' && Array.isArray(parsedData.data)) {
+              const sourceDocuments = parsedData.data as SourceDocument[];
+              if (sourceDocuments.length > 0) {
+                console.log('Successfully parsed source documents:', sourceDocuments.length);
+                
+                // Store source documents in the active chat
+                this.activeChat.update(chat => {
+                  if (!chat) return null;
+                  return {
+                    ...chat,
+                    sourceDocuments: sourceDocuments
+                  };
+                });
+                
+                // Update chats list to persist the source documents
+                this.updateChatInList();
+                
+                // Immediately save to storage to ensure persistence
+                this.saveChatsToStorage();
+                
+                // Emit source documents to subscribers
+                this.sourceDocumentsSubject.next(sourceDocuments);
+              }
+              
+              // Reset buffer and flag
+              this.sourceDocumentBuffer = '';
+              this.isCollectingSourceDocuments = false;
+            }
+          } catch (error) {
+            // JSON is not complete yet, continue collecting
+            console.log('Source document JSON not complete yet, continuing collection...');
+          }
+          
+          return;
+        }
+        
+        // Try to parse the event data as JSON
+        try {
+          const eventData = JSON.parse(event.data);
+          
+          if (eventData) {
+            // Handle different event types
+            if (eventData.event === 'text') {
+              // Process text event
+              const text = eventData.data?.text || '';
+              if (text) {
+                const updatedContent = accumulatedText + text;
+                this.updateMessage(messageId, updatedContent);
+                accumulatedText = updatedContent;
+              }
+            }
+            else if (eventData.event === 'sourceDocuments') {
+              // Start collecting source documents
+              this.isCollectingSourceDocuments = true;
+              this.sourceDocumentBuffer = event.data;
+              console.log('Started collecting source documents');
+              
+              // Try to parse immediately in case it's a complete JSON
+              try {
+                const parsedData = JSON.parse(this.sourceDocumentBuffer);
+                if (parsedData.event === 'sourceDocuments' && Array.isArray(parsedData.data)) {
+                  const sourceDocuments = parsedData.data as SourceDocument[];
+                  if (sourceDocuments.length > 0) {
+                    console.log('Source documents complete in first chunk:', sourceDocuments.length);
+                    
+                    // Store source documents in the active chat
+                    this.activeChat.update(chat => {
+                      if (!chat) return null;
+                      return {
+                        ...chat,
+                        sourceDocuments: sourceDocuments
+                      };
+                    });
+                    
+                    // Update chats list to persist the source documents
+                    this.updateChatInList();
+                    
+                    // Immediately save to storage to ensure persistence
+                    this.saveChatsToStorage();
+                    
+                    // Emit source documents to subscribers
+                    this.sourceDocumentsSubject.next(sourceDocuments);
+                    
+                    // Reset buffer and flag
+                    this.sourceDocumentBuffer = '';
+                    this.isCollectingSourceDocuments = false;
+                  }
+                }
+              } catch (error) {
+                // JSON is not complete, will continue collecting in subsequent events
+                console.log('Source document JSON not complete in first chunk, will continue collection...');
+              }
+            }
+            else if (eventData.event === 'agentReasoning' && Array.isArray(eventData.data)) {
+              // Process agent reasoning for thinking panel
+              const reasoningSteps = eventData.data as AgentReasoningStep[];
+              if (reasoningSteps.length > 0) {
+                // Process each step to ensure it doesn't have any circular references or complex objects
+                const cleanedSteps = reasoningSteps.map(step => ({
+                  agentName: step.agentName,
+                  messages: [...(step.messages || [])],
+                  next: step.next,
+                  instructions: step.instructions,
+                  usedTools: step.usedTools ? JSON.parse(JSON.stringify(step.usedTools)) : undefined,
+                  sourceDocuments: step.sourceDocuments ? JSON.parse(JSON.stringify(step.sourceDocuments)) : undefined,
+                  artifacts: step.artifacts ? JSON.parse(JSON.stringify(step.artifacts)) : undefined,
+                  nodeId: step.nodeId,
+                  thought: step.thought,
+                  action: step.action,
+                  observation: step.observation
+                }));
+                
+                // Store reasoning steps in the active chat
+                this.activeChat.update(chat => {
+                  if (!chat) return null;
+                  return {
+                    ...chat,
+                    reasoningSteps: cleanedSteps
+                  };
+                });
+                
+                // Immediately save to storage to ensure persistence
+                this.saveChatsToStorage();
+                
+                // Update chats list to persist the reasoning steps
+                this.updateChatInList();
+                
+                // Process each reasoning step
+                reasoningSteps.forEach((step, index) => {
+                  setTimeout(() => {
+                    this.thinkingSubject.next(step);
+                    
+                    // Also send thinking as a message chunk
+                    const thinkingContent = this.formatThinkingStep(step);
+                    this.messageChunksSubject.next({
+                      type: ChunkType.AgentReasoning,
+                      content: thinkingContent,
+                      messageId
+                    });
+                  }, index * 800); // Spread them out a bit for visual effect
+                });
+              }
+            }
+            else if (eventData.event === 'nextAgent' && typeof eventData.data === 'string') {
+              // Handle nextAgent event - this indicates which agent is processing next
+              console.log('Next agent:', eventData.data);
+              
+              // Send nextAgent as a message chunk
+              this.messageChunksSubject.next({
+                type: ChunkType.NextAgent,
+                content: eventData.data,
+                messageId
+              });
+              
+              // Optionally update the thinking panel with the next agent
+              this.thinkingSubject.next({
+                agentName: eventData.data,
+                messages: [`Processing with ${eventData.data}...`],
+                nodeId: 'nextAgent'
+              });
+            }
+            else if (eventData.event === 'usedTools') {
+              // Handle used tools if needed
+              console.log('Used tools:', eventData.data);
+            }
+          }
+        } catch (error) {
+          console.error('Error parsing event data as JSON:', error);
+          
+          // If we're collecting source documents and this is not valid JSON,
+          // it might be a continuation of the previous JSON
+          if (this.isCollectingSourceDocuments) {
+            this.sourceDocumentBuffer += event.data;
+            console.log('Added non-JSON data to source document buffer');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error processing stream event:', error);
+    }
+    
+    // Don't return anything since the method is void
   }
   
   /**
@@ -972,7 +1178,9 @@ export class ChatService {
               thought: step.thought,
               action: step.action,
               observation: step.observation
-            })) : []
+            })) : [],
+          // Ensure sourceDocuments is initialized
+          sourceDocuments: Array.isArray(chat.sourceDocuments) ? chat.sourceDocuments : []
         }));
         
         this.chats.set(parsedChats);
@@ -1058,51 +1266,134 @@ export class ChatService {
    * Attempt to fix malformed JSON that might be truncated or have other issues
    */
   private attemptToFixMalformedJson(jsonData: string): string | null {
+    if (!jsonData) return null;
+    
     try {
-      // First, try to parse it as is - maybe it's actually valid
+      // First try to parse as is
       JSON.parse(jsonData);
-      return jsonData; // If we get here, it's valid
+      return jsonData; // If it parses successfully, return as is
     } catch (error) {
-      console.warn('Attempting to fix malformed JSON:', jsonData);
+      console.log('JSON parsing failed, attempting to fix...');
       
-      // Common issues to fix:
-      let fixedJson = jsonData;
-      
-      // 1. Check if it ends with a comma (common in truncated arrays)
-      if (fixedJson.endsWith(',')) {
-        fixedJson = fixedJson + ']';
-      }
-      
-      // 2. Count opening and closing brackets/braces
-      const openBraces = (fixedJson.match(/\{/g) || []).length;
-      const closeBraces = (fixedJson.match(/\}/g) || []).length;
-      const openBrackets = (fixedJson.match(/\[/g) || []).length;
-      const closeBrackets = (fixedJson.match(/\]/g) || []).length;
-      
-      // Add missing closing braces/brackets
-      if (openBraces > closeBraces) {
-        const missing = openBraces - closeBraces;
-        fixedJson += '}'.repeat(missing);
-      }
-      
-      if (openBrackets > closeBrackets) {
-        const missing = openBrackets - closeBrackets;
-        fixedJson += ']'.repeat(missing);
-      }
-      
-      // 3. Check for unterminated strings (odd number of quotes)
-      const quotes = (fixedJson.match(/"/g) || []).length;
-      if (quotes % 2 !== 0) {
-        fixedJson += '"';
-      }
-      
-      // Try to parse the fixed JSON
       try {
-        JSON.parse(fixedJson);
-        console.log('Successfully fixed JSON:', fixedJson);
-        return fixedJson;
-      } catch (e) {
-        console.error('Failed to fix JSON:', e);
+        // Check if it's a source document event with potential truncation
+        if (jsonData.includes('"event":"sourceDocuments"')) {
+          console.log('Detected source document event, attempting specialized fix...');
+          
+          // Try to find the start of the array
+          const dataArrayStart = jsonData.indexOf('"data":[');
+          if (dataArrayStart > 0) {
+            // Find the last complete document object
+            let lastCompleteObjectEnd = -1;
+            let openBraces = 0;
+            let inQuotes = false;
+            let escapeNext = false;
+            
+            // Start from the data array start
+            for (let i = dataArrayStart + 7; i < jsonData.length; i++) {
+              const char = jsonData[i];
+              
+              if (escapeNext) {
+                escapeNext = false;
+                continue;
+              }
+              
+              if (char === '\\') {
+                escapeNext = true;
+                continue;
+              }
+              
+              if (char === '"' && !escapeNext) {
+                inQuotes = !inQuotes;
+                continue;
+              }
+              
+              if (!inQuotes) {
+                if (char === '{') {
+                  openBraces++;
+                } else if (char === '}') {
+                  openBraces--;
+                  
+                  // If we've closed an object at the top level
+                  if (openBraces === 0) {
+                    lastCompleteObjectEnd = i;
+                  }
+                }
+              }
+            }
+            
+            // If we found a complete object
+            if (lastCompleteObjectEnd > 0) {
+              // Reconstruct the JSON with the complete objects
+              const fixedJson = jsonData.substring(0, lastCompleteObjectEnd + 1) + ']}';
+              
+              // Validate the fixed JSON
+              try {
+                JSON.parse(fixedJson);
+                console.log('Successfully fixed source document JSON');
+                return fixedJson;
+              } catch (innerError) {
+                console.error('Failed to fix source document JSON:', innerError);
+              }
+            }
+          }
+        }
+        
+        // If specialized fix didn't work, try general approach
+        // Try to find where the valid JSON ends
+        let validJson = '';
+        let openBraces = 0;
+        let openBrackets = 0;
+        let inQuotes = false;
+        let escapeNext = false;
+        
+        for (let i = 0; i < jsonData.length; i++) {
+          const char = jsonData[i];
+          validJson += char;
+          
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            escapeNext = true;
+            continue;
+          }
+          
+          if (char === '"' && !escapeNext) {
+            inQuotes = !inQuotes;
+            continue;
+          }
+          
+          if (!inQuotes) {
+            if (char === '{') {
+              openBraces++;
+            } else if (char === '}') {
+              openBraces--;
+            } else if (char === '[') {
+              openBrackets++;
+            } else if (char === ']') {
+              openBrackets--;
+            }
+            
+            // If all braces and brackets are closed, we have valid JSON
+            if (openBraces === 0 && openBrackets === 0 && validJson.trim().length > 1) {
+              try {
+                JSON.parse(validJson);
+                return validJson;
+              } catch (e) {
+                // Continue searching
+              }
+            }
+          }
+        }
+        
+        // If we couldn't fix it, return null
+        console.error('Failed to fix malformed JSON');
+        return null;
+      } catch (fixError) {
+        console.error('Error while trying to fix JSON:', fixError);
         return null;
       }
     }
