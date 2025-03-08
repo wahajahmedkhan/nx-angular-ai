@@ -17,6 +17,7 @@ export interface Chat {
   updatedAt: Date;
   flowChatId?: string; // Store FlowWise chatId for session continuity
   sessionId?: string; // Store FlowWise sessionId for PostgreSQL agent memory
+  reasoningSteps?: AgentReasoningStep[]; // Store reasoning steps for this chat
 }
 
 export interface MessageChunk {
@@ -51,7 +52,6 @@ export interface AgentReasoningStep {
   usedTools?: any[];
   sourceDocuments?: any[];
   artifacts?: any[];
-  state?: any;
   nodeId?: string;
   thought?: string;
   action?: string;

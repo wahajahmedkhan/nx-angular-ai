@@ -67,6 +67,7 @@ export class ChatService {
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      reasoningSteps: [] // Initialize reasoning steps
     };
     
     // Add to chat list
@@ -445,6 +446,36 @@ export class ChatService {
                     // Process agent reasoning for thinking panel
                     const reasoningSteps = eventData.data as AgentReasoningStep[];
                     if (reasoningSteps.length > 0) {
+                      // Process each step to ensure it doesn't have any circular references or complex objects
+                      const cleanedSteps = reasoningSteps.map(step => ({
+                        agentName: step.agentName,
+                        messages: [...(step.messages || [])],
+                        next: step.next,
+                        instructions: step.instructions,
+                        usedTools: step.usedTools ? JSON.parse(JSON.stringify(step.usedTools)) : undefined,
+                        sourceDocuments: step.sourceDocuments ? JSON.parse(JSON.stringify(step.sourceDocuments)) : undefined,
+                        artifacts: step.artifacts ? JSON.parse(JSON.stringify(step.artifacts)) : undefined,
+                        nodeId: step.nodeId,
+                        thought: step.thought,
+                        action: step.action,
+                        observation: step.observation
+                      }));
+                      
+                      // Store reasoning steps in the active chat
+                      this.activeChat.update(chat => {
+                        if (!chat) return null;
+                        return {
+                          ...chat,
+                          reasoningSteps: cleanedSteps
+                        };
+                      });
+                      
+                      // Immediately save to storage to ensure persistence
+                      this.saveChatsToStorage();
+                      
+                      // Update chats list to persist the reasoning steps
+                      this.updateChatInList();
+                      
                       // Process each reasoning step
                       reasoningSteps.forEach((step, index) => {
                         setTimeout(() => {
@@ -577,6 +608,9 @@ export class ChatService {
             
             // Update chats list
             this.updateChatInList();
+            
+            // Log that we've stored both IDs for future use
+            console.log('Stored fallback chatId for future requests:', fallbackChatId);
           }
         }
       };
@@ -923,10 +957,26 @@ export class ChatService {
           messages: chat.messages.map(msg => ({
             ...msg,
             timestamp: new Date(msg.timestamp)
-          }))
+          })),
+          // Ensure reasoningSteps is initialized and properly structured
+          reasoningSteps: Array.isArray(chat.reasoningSteps) ? 
+            chat.reasoningSteps.map(step => ({
+              agentName: step.agentName || 'Unknown Agent',
+              messages: Array.isArray(step.messages) ? [...step.messages] : [],
+              next: step.next,
+              instructions: step.instructions,
+              usedTools: step.usedTools,
+              sourceDocuments: step.sourceDocuments,
+              artifacts: step.artifacts,
+              nodeId: step.nodeId,
+              thought: step.thought,
+              action: step.action,
+              observation: step.observation
+            })) : []
         }));
         
         this.chats.set(parsedChats);
+        console.log('Loaded chats from storage:', parsedChats);
       } catch (error) {
         console.error('Failed to parse stored chats:', error);
       }
@@ -1056,5 +1106,44 @@ export class ChatService {
         return null;
       }
     }
+  }
+  
+  /**
+   * Update reasoning steps in the active chat
+   */
+  public updateReasoningSteps(steps: AgentReasoningStep[]): void {
+    if (!steps || steps.length === 0) return;
+    
+    // Process each step to ensure it doesn't have any circular references or complex objects
+    const cleanedSteps = steps.map(step => ({
+      agentName: step.agentName || 'Unknown Agent',
+      messages: Array.isArray(step.messages) ? [...step.messages] : [],
+      next: step.next,
+      instructions: step.instructions,
+      usedTools: step.usedTools ? JSON.parse(JSON.stringify(step.usedTools)) : undefined,
+      sourceDocuments: step.sourceDocuments ? JSON.parse(JSON.stringify(step.sourceDocuments)) : undefined,
+      artifacts: step.artifacts ? JSON.parse(JSON.stringify(step.artifacts)) : undefined,
+      nodeId: step.nodeId,
+      thought: step.thought,
+      action: step.action,
+      observation: step.observation
+    }));
+    
+    // Update the active chat
+    this.activeChat.update(chat => {
+      if (!chat) return null;
+      return {
+        ...chat,
+        reasoningSteps: cleanedSteps
+      };
+    });
+    
+    // Update chats list to persist the reasoning steps
+    this.updateChatInList();
+    
+    // Immediately save to storage to ensure persistence
+    this.saveChatsToStorage();
+    
+    console.log('Updated reasoning steps in active chat:', cleanedSteps.length);
   }
 }

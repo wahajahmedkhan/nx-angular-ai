@@ -59,16 +59,6 @@ import { AgentReasoningStep } from '../../models/interfaces';
                 </div>
               </div>
               
-              <!-- State if available -->
-              <div *ngIf="step.state && hasStateProperties(step.state)" class="ml-2">
-                <h4 class="text-xs uppercase tracking-wider text-[var(--techwave-body-color)] font-semibold mb-2">STATE:</h4>
-                <div class="text-sm text-[var(--techwave-heading-color)] bg-[var(--techwave-some-a-bg-color)] p-3 rounded border border-[var(--techwave-border-color)]">
-                  <div *ngFor="let key of getStateKeys(step.state)" class="mb-1">
-                    <strong>{{ key }}:</strong> {{ getStateValue(step.state, key) }}
-                  </div>
-                </div>
-              </div>
-              
               <!-- Next agent if available -->
               <div *ngIf="step.next" class="ml-2 mt-1">
                 <div class="flex items-center">
@@ -104,11 +94,18 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
     // Use effect to react to changes in the current chat
     effect(() => {
       const currentChat = this.chatService.currentChat();
-      // If the chat ID changed, clear the reasoning steps
+      // If the chat ID changed, update the reasoning steps
       if (currentChat && currentChat.id !== this.currentChatId) {
         this.currentChatId = currentChat.id;
-        this.reasoningSteps = [];
-        this.isComplete = false;
+        
+        // Load reasoning steps from the current chat if available
+        if (currentChat.reasoningSteps && currentChat.reasoningSteps.length > 0) {
+          this.reasoningSteps = [...currentChat.reasoningSteps];
+          this.isComplete = true;
+        } else {
+          this.reasoningSteps = [];
+          this.isComplete = false;
+        }
       } else if (!currentChat) {
         this.currentChatId = null;
         this.reasoningSteps = [];
@@ -118,11 +115,26 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
+    // Load any existing reasoning steps from the current chat
+    const currentChat = this.chatService.currentChat();
+    if (currentChat && currentChat.reasoningSteps && currentChat.reasoningSteps.length > 0) {
+      this.reasoningSteps = [...currentChat.reasoningSteps];
+      this.isComplete = true;
+    }
+    
     // Subscribe to thinking steps
     this.subscription.add(
       this.chatService.thinking$.subscribe(step => {
         if (step) {
+          // Add the step to the local array
           this.reasoningSteps.push(step);
+          
+          // Update the active chat with the latest reasoning steps
+          const currentChat = this.chatService.currentChat();
+          if (currentChat) {
+            // Update the active chat in the chat service
+            this.chatService.updateReasoningSteps(this.reasoningSteps);
+          }
         }
       })
     );
@@ -133,6 +145,9 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
         if (chunk.type === 'start') {
           this.reasoningSteps = [];
           this.isComplete = false;
+          
+          // Clear reasoning steps in the active chat as well
+          this.chatService.updateReasoningSteps([]);
         } else if (chunk.type === 'end') {
           this.isComplete = true;
         }
@@ -142,22 +157,5 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
   
   ngOnDestroy(): void {
     this.subscription.unsubscribe();
-  }
-  
-  // Helper methods for state display
-  hasStateProperties(state: any): boolean {
-    return state && typeof state === 'object' && Object.keys(state).length > 0;
-  }
-  
-  getStateKeys(state: any): string[] {
-    return Object.keys(state);
-  }
-  
-  getStateValue(state: any, key: string): string {
-    const value = state[key];
-    if (typeof value === 'object') {
-      return JSON.stringify(value);
-    }
-    return String(value);
   }
 }

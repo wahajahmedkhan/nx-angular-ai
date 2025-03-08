@@ -11,7 +11,7 @@ import { ChatHistoryComponent } from '../chat-history/chat-history.component';
   template: `
     <div class="flex h-full overflow-hidden">
       <!-- Left Sidebar - Thinking -->
-      <div class="w-[30%] hidden lg:block border-r border-[var(--techwave-border-color)] bg-[var(--techwave-some-r-bg-color)]">
+      <div class="w-[25%] hidden lg:block border-r border-[var(--techwave-border-color)] bg-[var(--techwave-some-r-bg-color)]">
         <app-thinking-panel></app-thinking-panel>
       </div>
       
