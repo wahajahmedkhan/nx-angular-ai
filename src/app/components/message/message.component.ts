@@ -1,10 +1,9 @@
-import { Component, Input, SecurityContext, ChangeDetectorRef, OnChanges, SimpleChanges, OnInit } from '@angular/core';
+import { Component, Input, ChangeDetectorRef, OnChanges, SimpleChanges, OnInit } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Message } from '../../models/interfaces';
 import { MessageRole } from '../../models/enums';
 import { marked } from 'marked';
-import * as hljs from 'highlight.js';
 import { SourceDocumentsComponent } from '../source-documents/source-documents.component';
 import { ChatService } from '../../services/chat.service';
 
@@ -138,6 +137,38 @@ import { ChatService } from '../../services/chat.service';
       background-color: transparent;
     }
     
+    /* Enhanced table styling */
+    :host ::ng-deep table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      overflow-x: auto;
+      display: block;
+    }
+    
+    :host ::ng-deep table th {
+      background-color: var(--techwave-table-header-bg-color, var(--techwave-code-bg-color));
+      color: var(--techwave-table-header-text-color, var(--techwave-heading-color));
+      font-weight: 600;
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--techwave-table-border-color, var(--techwave-border-color));
+    }
+    
+    :host ::ng-deep table td {
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--techwave-table-border-color, var(--techwave-border-color));
+      vertical-align: top;
+    }
+    
+    :host ::ng-deep table tr:nth-child(even) {
+      background-color: var(--techwave-table-row-alt-bg-color, rgba(0, 0, 0, 0.03));
+    }
+    
+    :host ::ng-deep table tr:hover {
+      background-color: var(--techwave-table-row-hover-bg-color, rgba(0, 0, 0, 0.05));
+    }
+    
     .typing-animation {
       display: flex;
       justify-content: space-between;
@@ -179,7 +210,7 @@ export class MessageComponent implements OnInit, OnChanges {
   
   // Property to store cached content
   private _cachedContent: SafeHtml | null = null;
-  private _lastContent: string = '';
+  private _lastContent = '';
   
   constructor(
     private sanitizer: DomSanitizer,
@@ -194,6 +225,8 @@ export class MessageComponent implements OnInit, OnChanges {
   }
   
   ngOnInit(): void {
+    // Initialize component - no specific initialization needed at this time
+    console.log('Message component initialized');
   }
   
   ngOnChanges(changes: SimpleChanges): void {
@@ -322,6 +355,12 @@ export class MessageComponent implements OnInit, OnChanges {
     // Process the content with marked
     let html = '';
     try {
+      // Configure marked for tables and other GFM features
+      marked.setOptions({
+        gfm: true,
+        breaks: true
+      });
+      
       html = marked.parse(this.message.content) as string;
       
       // Apply syntax highlighting to code blocks
@@ -329,10 +368,19 @@ export class MessageComponent implements OnInit, OnChanges {
         try {
           // Basic syntax highlighting without using highlight.js API
           return `<pre><code class="language-${language} hljs">${code}</code></pre>`;
-        } catch (e) {
+        } catch {
           return match; // If highlighting fails, return the original match
         }
       });
+      
+      // Enhance table rendering with responsive wrapper and additional classes
+      html = html.replace(
+        /<table>/g, 
+        '<div class="table-responsive"><table class="table-auto">'
+      ).replace(
+        /<\/table>/g, 
+        '</table></div>'
+      );
       
       // Cache the result
       this._cachedContent = this.sanitizer.bypassSecurityTrustHtml(html);
