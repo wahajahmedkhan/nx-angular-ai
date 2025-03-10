@@ -61,15 +61,16 @@ import { MessageRole } from '../../models/enums';
       </div>
       
       <div class="p-4 border-t border-[var(--techwave-border-color)]">
-        <div class="space-y-2">
+        <div class="grid grid-cols-2 gap-2">
           <app-button 
             variant="outline" 
             size="sm" 
             [fullWidth]="true"
             [disabled]="chatHistory.length === 0"
             (onClick)="onClearChat()"
+            class="text-xs whitespace-nowrap flex items-center justify-center h-9 px-1"
           >
-            Clear Current Chat
+            Clear Chat
           </app-button>
           
           <app-button 
@@ -78,8 +79,9 @@ import { MessageRole } from '../../models/enums';
             [fullWidth]="true"
             [disabled]="!currentChatId"
             (onClick)="onDeleteChat()"
+            class="text-xs whitespace-nowrap flex items-center justify-center h-9 px-1"
           >
-            Delete This Chat
+            Delete Chat
           </app-button>
         </div>
       </div>
