@@ -11,6 +11,11 @@ import { CommonModule } from '@angular/common';
       [class]="buttonClasses"
       (click)="onClick.emit($event)"
       [type]="type"
+      [ngClass]="{
+        'danger-hover': variant === 'danger',
+        'outline-hover': variant === 'outline',
+        'primary-hover': variant === 'primary'
+      }"
     >
       <ng-content></ng-content>
     </button>
@@ -80,6 +85,46 @@ import { CommonModule } from '@angular/common';
       
       &:hover::after {
         opacity: 1;
+      }
+    }
+    
+    .primary-hover {
+      &:hover {
+        opacity: 0.7 !important;
+      }
+      
+      &:hover::after {
+        opacity: 0.5 !important;
+      }
+    }
+    
+    .outline-hover {
+      &:hover {
+        opacity: 0.7 !important;
+      }
+      
+      &::before {
+        opacity: .05 !important;
+      }
+      
+      &:hover::after {
+        opacity: 0.4 !important;
+      }
+    }
+    
+    .danger-hover {
+      &:hover {
+        box-shadow: 0px 5px 15px rgba(220, 38, 38, 0.6) !important;
+        opacity: 0.7 !important;
+      }
+      
+      &::before {
+        color: rgba(220, 38, 38, 0.8) !important;
+      }
+      
+      &:hover::after {
+        background: linear-gradient(270deg, #dc2626, #ef4444, #dc2626, #ef4444) !important;
+        opacity: 0.4 !important;
       }
     }
   `]
