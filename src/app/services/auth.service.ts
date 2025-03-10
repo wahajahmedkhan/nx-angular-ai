@@ -12,6 +12,20 @@ export interface LoginResponse {
   result: boolean;
   data?: string; // token
   message?: string;
+  token?: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterResponse {
+  result: boolean;
+  data?: string; // token
+  message?: string;
+  token?: string;
+  id?: string; // user id for successful registration
 }
 
 @Injectable({
@@ -22,8 +36,8 @@ export class AuthService {
   
   constructor(private http: HttpClient, private router: Router) {}
   
-  login(email: string, password: string): Observable<any> {
-    return this.http.post<any>(`${this.apiUrl}/login`, { email, password })
+  login(email: string, password: string): Observable<LoginResponse> {
+    return this.http.post<LoginResponse>(`${this.apiUrl}/login`, { email, password })
       .pipe(
         tap(response => {
           if (response.token) {
@@ -32,6 +46,18 @@ export class AuthService {
             
             // Store user email for future reference
             localStorage.setItem('loginUser', email);
+          }
+        })
+      );
+  }
+  
+  register(email: string, password: string): Observable<RegisterResponse> {
+    return this.http.post<RegisterResponse>(`${this.apiUrl}/register`, { email, password })
+      .pipe(
+        tap(response => {
+          if (response.id) {
+            // Store user email for future reference
+            localStorage.setItem('registeredEmail', email);
           }
         })
       );
@@ -56,5 +82,9 @@ export class AuthService {
   
   getUserEmail(): string | null {
     return localStorage.getItem('loginUser');
+  }
+  
+  getRegisteredEmail(): string | null {
+    return localStorage.getItem('registeredEmail');
   }
 }
