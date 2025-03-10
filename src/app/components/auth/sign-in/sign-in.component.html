@@ -2,20 +2,58 @@
   <div class="signin-container">
     <div class="signin-box">
         <h2>Sign In</h2>
-        <form id="signin-form">
+        <form id="signin-form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
+            <!-- Error message display -->
+            <div class="error-message" *ngIf="errorMessage">
+                <p>{{ errorMessage }}</p>
+            </div>
+            
+            <!-- Success message display -->
+            <div class="success-message" *ngIf="successMessage">
+                <p>{{ successMessage }}</p>
+            </div>
+            
             <div class="input-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" required>
+                <input 
+                  type="email" 
+                  id="email" 
+                  name="email" 
+                  [(ngModel)]="loginData.email" 
+                  required
+                  pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+                  #email="ngModel">
+                <div class="validation-error" *ngIf="email.invalid && (email.dirty || email.touched)">
+                  <p *ngIf="email.errors?.['required']">Email is required</p>
+                  <p *ngIf="email.errors?.['pattern']">Please enter a valid email address</p>
+                </div>
             </div>
             <div class="input-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input 
+                  type="password" 
+                  id="password" 
+                  name="password" 
+                  [(ngModel)]="loginData.password" 
+                  required
+                  minlength="6"
+                  #password="ngModel">
+                <div class="validation-error" *ngIf="password.invalid && (password.dirty || password.touched)">
+                  <p *ngIf="password.errors?.['required']">Password is required</p>
+                  <p *ngIf="password.errors?.['minlength']">Password must be at least 6 characters</p>
+                </div>
             </div>
-            <button type="submit" class="signin-button">Sign In</button>
+            <button 
+              type="submit" 
+              class="signin-button"
+              [disabled]="loginForm.invalid || isLoading">
+              <span *ngIf="!isLoading">Sign In</span>
+              <div class="spinner" *ngIf="isLoading"></div>
+            </button>
         </form>
         <div class="signup-link">
-            <p>Don't have an account? <a href="#">Sign Up</a></p>
+            <p>Don't have an account? <a routerLink="/sign-up">Sign Up</a></p>
         </div>
     </div>
-</div>
+  </div>
 </div>
