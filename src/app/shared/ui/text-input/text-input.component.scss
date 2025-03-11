@@ -1,0 +1,38 @@
+:host {
+  display: block;
+}
+
+/* Enhanced focus styles */
+input:focus {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  transition: all 0.2s ease;
+}
+
+/* Improved disabled state */
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Dark mode enhancements */
+@media (prefers-color-scheme: dark) {
+  input:focus {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+  }
+}
+
+/* Animation for focus state */
+input {
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+/* Error state - can be added later with @Input() error */
+.error input {
+  border-color: #ef4444;
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}

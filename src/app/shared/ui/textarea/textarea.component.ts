@@ -6,36 +6,8 @@ import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/f
   selector: 'app-textarea',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  template: `
-    <div class="w-full">
-      <label 
-        *ngIf="label" 
-        [for]="id" 
-        class="block text-sm font-medium mb-1 text-[var(--techwave-heading-color)]"
-      >
-        {{ label }}
-      </label>
-      
-      <div class="relative">
-        <textarea
-          #textareaElement
-          [id]="id"
-          [rows]="rows"
-          [placeholder]="placeholder"
-          [disabled]="disabled"
-          [(ngModel)]="value"
-          (ngModelChange)="onInputChange($event)"
-          (blur)="onBlur()"
-          (keydown)="onKeyDown($event)"
-          class="w-full py-3 px-4 rounded-full bg-[var(--techwave-some-r-bg-color)] border-2 border-[var(--techwave-border-color)] text-[var(--techwave-heading-color)] focus:outline-none focus:border-[var(--techwave-main-color)] transition-all duration-300 ease-in-out disabled:opacity-60 placeholder:text-[var(--techwave-body-color)] resize-none overflow-auto"
-        ></textarea>
-      </div>
-      
-      <p *ngIf="hint" class="mt-2 text-xs text-[var(--techwave-body-color)]">
-        {{ hint }}
-      </p>
-    </div>
-  `,
+  templateUrl: './textarea.component.html',
+  styleUrls: ['./textarea.component.scss'],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -59,8 +31,9 @@ export class TextareaComponent implements ControlValueAccessor, OnInit {
   value = '';
   
   // ControlValueAccessor implementation
-  private onChange: (value: string) => void = () => {};
-  private onTouched: () => void = () => {};
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private onChange = (_value: string): void => { /* no-op */ };
+  private onTouched = (): void => { /* no-op */ };
   
   ngOnInit(): void {
     if (this.autoResize) {

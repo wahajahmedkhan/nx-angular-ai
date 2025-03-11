@@ -8,95 +8,8 @@ import { SourceDocument } from '../../models/interfaces';
   selector: 'app-source-documents',
   standalone: true,
   imports: [CommonModule],
-  template: `
-    <div *ngIf="sourceDocuments.length > 0" class="mt-4">
-      <div class="flex flex-wrap gap-2">
-        <div 
-          *ngFor="let doc of sourceDocuments" 
-          class="relative inline-block"
-        >
-          <button
-            (click)="openModal(doc)"
-            (keydown.enter)="openModal(doc)"
-            (keydown.space)="openModal(doc)"
-            class="px-3 py-1.5 bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100 rounded-full text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
-            [title]="getFullTitle(doc)"
-            tabindex="0"
-            [attr.aria-label]="'View source document: ' + getFullTitle(doc)"
-          >
-            {{ getShortTitle(doc) }}
-          </button>
-        </div>
-      </div>
-      
-      <!-- Modal -->
-      <div 
-        *ngIf="selectedDocument" 
-        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-        (click)="closeModal($event)"
-        (keydown.escape)="closeModal()"
-        tabindex="-1"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modalTitle"
-      >
-        <div 
-          class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden"
-          (click)="$event.stopPropagation()"
-          (keydown)="$event.stopPropagation()"
-          role="document"
-          tabindex="0"
-        >
-          <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-            <h3 id="modalTitle" class="text-lg font-semibold text-gray-900 dark:text-white">{{ getFullTitle(selectedDocument) }}</h3>
-            <button 
-              (click)="closeModal()"
-              (keydown.enter)="closeModal()"
-              class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              [attr.aria-label]="'Close modal'"
-              tabindex="0"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div class="p-4 overflow-y-auto max-h-[calc(80vh-8rem)]">
-            <div class="mb-4">
-              <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Author</h4>
-              <p class="text-gray-900 dark:text-white">{{ getAuthor(selectedDocument) }}</p>
-            </div>
-            <div class="mb-4" *ngIf="getMetadataDisplay(selectedDocument)">
-              <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Metadata</h4>
-              <pre class="text-gray-900 dark:text-white text-sm bg-gray-100 dark:bg-gray-700 p-2 rounded">{{ getMetadataDisplay(selectedDocument) }}</pre>
-            </div>
-            <div class="mb-4">
-              <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Content</h4>
-              <p class="text-gray-900 dark:text-white whitespace-pre-line">{{ selectedDocument.pageContent }}</p>
-            </div>
-            <div *ngIf="getLineRange(selectedDocument)">
-              <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Lines</h4>
-              <p class="text-gray-900 dark:text-white">{{ getLineRange(selectedDocument) }}</p>
-            </div>
-          </div>
-          <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-            <button 
-              (click)="closeModal()"
-              (keydown.enter)="closeModal()"
-              (keydown.space)="closeModal()"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              tabindex="0"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [`
-    /* Add any additional styles here */
-  `]
+  templateUrl: './source-documents.component.html',
+  styleUrls: ['./source-documents.component.scss']
 })
 export class SourceDocumentsComponent implements OnInit, OnDestroy {
   sourceDocuments: SourceDocument[] = [];
@@ -133,7 +46,7 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     this.selectedDocument = doc;
   }
   
-  closeModal(event?: MouseEvent): void {
+  closeModal(): void {
     this.selectedDocument = null;
   }
   
@@ -205,7 +118,7 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     const keys = Object.keys(doc.metadata);
     if (keys.length <= 1) return null; // Only title/author, no additional metadata
     
-    const metadataObj: Record<string, any> = {};
+    const metadataObj: Record<string, unknown> = {};
     
     // Skip the first key (title) and add the rest
     for (let i = 1; i < keys.length; i++) {

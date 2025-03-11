@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, forwardRef } from '@angular/core';
+import { Component, Input, forwardRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms';
 
@@ -6,34 +6,8 @@ import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/f
   selector: 'app-text-input',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  template: `
-    <div class="w-full">
-      <label 
-        *ngIf="label" 
-        [for]="id" 
-        class="block text-sm font-medium mb-1 text-light-text dark:text-dark-text"
-      >
-        {{ label }}
-      </label>
-      
-      <div class="relative">
-        <input
-          [type]="type"
-          [id]="id"
-          [placeholder]="placeholder"
-          [disabled]="disabled"
-          [value]="value"
-          (input)="onInputChange($event)"
-          (blur)="onBlur()"
-          class="w-full py-2 px-3 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-60 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-        />
-      </div>
-      
-      <p *ngIf="hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {{ hint }}
-      </p>
-    </div>
-  `,
+  templateUrl: './text-input.component.html',
+  styleUrls: ['./text-input.component.scss'],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -53,8 +27,10 @@ export class TextInputComponent implements ControlValueAccessor {
   value = '';
   
   // ControlValueAccessor implementation
-  private onChange: (value: string) => void = () => {};
-  private onTouched: () => void = () => {};
+  // Using arrow functions with no-op implementations to avoid lint errors
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private onChange = (_value: string): void => { /* no-op */ };
+  private onTouched = (): void => { /* no-op */ };
   
   writeValue(value: string): void {
     this.value = value || '';

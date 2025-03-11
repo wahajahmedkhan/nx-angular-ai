@@ -5,82 +5,14 @@ import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { ThemeService } from '../../services/theme.service';
 import { MessageComponent } from '../message/message.component';
-import { Chat, Message } from '../../models/interfaces';
+import { Message } from '../../models/interfaces';
 
 @Component({
   selector: 'app-chat-area',
   standalone: true,
   imports: [CommonModule, FormsModule, MessageComponent],
-  template: `
-    <div class="h-full flex flex-col">
-      <!-- Messages container -->
-      <div 
-        class="flex-1 overflow-y-auto p-4 scrollbar-thin" 
-        #messagesContainer
-      >
-        <div class="max-w-4xl mx-auto">
-          <div *ngIf="!currentChat?.messages?.length" class="flex flex-col items-center justify-center h-full text-center p-4">
-            <h2 class="text-xl font-bold mb-2 text-[var(--techwave-heading-color)]">Start a new conversation</h2>
-            <p class="text-[var(--techwave-body-color)] mb-6">Ask a question to begin chatting with the AI assistant</p>
-          </div>
-          
-          <div *ngIf="currentChat?.messages?.length" class="space-y-6">
-            <app-message 
-              *ngFor="let message of currentChat?.messages" 
-              [message]="message"
-              [isLastMessage]="isLastMessage(message)"
-            ></app-message>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Input area -->
-      <div class="p-4 border-t border-[var(--techwave-border-color)]">
-        <div class="max-w-4xl mx-auto">
-          <div class="relative">
-            <textarea
-              #messageInput
-              class="w-full p-3 pr-12 bg-[var(--techwave-input-bg-color)] border border-[var(--techwave-border-color)] rounded-lg text-[var(--techwave-input-text-color)] placeholder-[var(--techwave-placeholder-color)] focus:outline-none focus:ring-2 focus:ring-[var(--techwave-primary-color)] focus:border-transparent resize-none"
-              placeholder="Type your message here..."
-              rows="2"
-              [disabled]="isLoading"
-              (keydown.enter)="onEnterKey($event)"
-              [(ngModel)]="newMessage"
-            ></textarea>
-            
-            <button 
-              class="absolute right-3 bottom-3 text-[var(--techwave-primary-color)] hover:text-[var(--techwave-primary-hover-color)] disabled:opacity-50 disabled:cursor-not-allowed"
-              [disabled]="isLoading || !newMessage.trim()"
-              (click)="sendMessage(newMessage); newMessage = ''; messageInput.focus()"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </div>
-          
-          <div *ngIf="isLoading" class="mt-2 text-sm text-[var(--techwave-body-color)]">
-            AI is thinking...
-          </div>
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [`
-    :host {
-      display: block;
-      height: 100%;
-    }
-    
-    /* Animation delay utilities */
-    .animation-delay-200 {
-      animation-delay: 200ms;
-    }
-    
-    .animation-delay-400 {
-      animation-delay: 400ms;
-    }
-  `]
+  templateUrl: './chat-area.component.html',
+  styleUrls: ['./chat-area.component.scss']
 })
 export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
   currentChat: { messages: Message[], title: string } | null = null;
@@ -119,7 +51,10 @@ export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
           this.isLoading = false;
           
           // Force update of current chat to ensure message is marked as complete
-          this.currentChat = { ...this.chatService.currentChat()! };
+          const currentChat = this.chatService.currentChat();
+          if (currentChat) {
+            this.currentChat = { ...currentChat };
+          }
           
           // Scroll to bottom when stream ends
           this.shouldScrollToBottom = true;
@@ -214,8 +149,11 @@ export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
     return message === this.currentChat?.messages[this.currentChat.messages.length - 1];
   }
   
-  onEnterKey(event: any): void {
-    if (event.shiftKey) return;
+  onEnterKey(event: Event): void {
+    // Cast the event to KeyboardEvent to access keyboard-specific properties
+    const keyboardEvent = event as KeyboardEvent;
+    
+    if (keyboardEvent.shiftKey) return;
     event.preventDefault();
     if (this.newMessage.trim()) {
       this.sendMessage(this.newMessage);

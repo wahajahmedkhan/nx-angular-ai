@@ -1,0 +1,36 @@
+/* Source documents component styles */
+:host {
+  display: block;
+}
+
+/* Modal animation */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Apply animations */
+.fixed {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.fixed > div {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Ensure pre tags don't overflow */
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Improve accessibility focus styles */
+button:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
