@@ -1,0 +1,13 @@
+<button
+  [disabled]="disabled"
+  [class]="buttonClasses"
+  (click)="clicked.emit($event)"
+  [type]="type"
+  [ngClass]="{
+    'danger-hover': variant === 'danger',
+    'outline-hover': variant === 'outline',
+    'primary-hover': variant === 'primary'
+  }"
+>
+  <ng-content></ng-content>
+</button>
