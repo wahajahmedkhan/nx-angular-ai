@@ -1,4 +1,4 @@
-import { Component, Input, ChangeDetectorRef, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, ChangeDetectorRef, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Message } from '../../models/interfaces';
@@ -12,7 +12,8 @@ import { ChatService } from '../../services/chat.service';
   standalone: true,
   imports: [CommonModule, DatePipe, SourceDocumentsComponent],
   templateUrl: './message.component.html',
-  styleUrls: ['./message.component.scss']
+  styleUrls: ['./message.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MessageComponent implements OnChanges {
   @Input() message!: Message;

@@ -220,24 +220,103 @@ export class ChatService {
                   // Try to parse the JSON data
                   const jsonData = dataMatch[1].trim();
                   
-                  // Check if the JSON is potentially malformed (e.g., truncated)
+                  // Check if the JSON is potentially incomplete or malformed
                   let eventData;
-                  try {
-                    eventData = JSON.parse(jsonData);
-                  } catch (parseError) {
-                    console.warn('JSON parse error, attempting to fix malformed JSON:', parseError);
-                    
-                    // Try to fix common JSON issues
-                    // 1. Check for unterminated strings (most common issue)
-                    const fixedJson = this.attemptToFixMalformedJson(jsonData);
-                    
-                    if (fixedJson) {
-                      console.log('Attempting to parse fixed JSON');
-                      eventData = JSON.parse(fixedJson);
-                    } else {
-                      // If we can't fix it, rethrow the original error
-                      throw parseError;
+                  let isCompleteJson = true;
+                  
+                  // Check for common signs of incomplete JSON
+                  if (jsonData.includes('"event":') && !jsonData.endsWith('}')) {
+                    isCompleteJson = false;
+                    console.warn('Detected incomplete JSON, waiting for more data');
+                    continue; // Skip this chunk and wait for more data
+                  }
+                  
+                  // Check for unterminated strings (look for odd number of unescaped quotes)
+                  let quoteCount = 0;
+                  let i = 0;
+                  while (i < jsonData.length) {
+                    if (jsonData[i] === '\\' && i + 1 < jsonData.length) {
+                      i += 2; // Skip escaped character
+                      continue;
                     }
+                    if (jsonData[i] === '"') {
+                      quoteCount++;
+                    }
+                    i++;
+                  }
+                  
+                  if (quoteCount % 2 !== 0) {
+                    isCompleteJson = false;
+                    console.warn('Detected unterminated string in JSON, waiting for more data');
+                    continue; // Skip this chunk and wait for more data
+                  }
+                  
+                  // Check for balanced braces and brackets
+                  let openBraces = 0;
+                  let openBrackets = 0;
+                  let inString = false;
+                  let escapeNext = false;
+                  
+                  for (let i = 0; i < jsonData.length; i++) {
+                    const char = jsonData[i];
+                    
+                    if (escapeNext) {
+                      escapeNext = false;
+                      continue;
+                    }
+                    
+                    if (char === '\\') {
+                      escapeNext = true;
+                      continue;
+                    }
+                    
+                    if (char === '"' && !escapeNext) {
+                      inString = !inString;
+                      continue;
+                    }
+                    
+                    if (!inString) {
+                      if (char === '{') {
+                        openBraces++;
+                      } else if (char === '}') {
+                        openBraces--;
+                      } else if (char === '[') {
+                        openBrackets++;
+                      } else if (char === ']') {
+                        openBrackets--;
+                      }
+                    }
+                  }
+                  
+                  if (openBraces !== 0 || openBrackets !== 0) {
+                    isCompleteJson = false;
+                    console.warn('Detected unbalanced braces/brackets in JSON, waiting for more data');
+                    continue; // Skip this chunk and wait for more data
+                  }
+                  
+                  // Only try to parse if we believe the JSON is complete
+                  if (isCompleteJson) {
+                    try {
+                      eventData = JSON.parse(jsonData);
+                    } catch (parseError) {
+                      console.warn('JSON parse error despite completeness checks:', parseError);
+                      
+                      // Try to fix common JSON issues as a fallback
+                      const fixedJson = this.attemptToFixMalformedJson(jsonData);
+                      
+                      if (fixedJson) {
+                        console.log('Attempting to parse fixed JSON');
+                        eventData = JSON.parse(fixedJson);
+                      } else {
+                        // If we can't fix it, skip this chunk and wait for more data
+                        console.warn('Could not fix JSON, waiting for more data');
+                        continue;
+                      }
+                    }
+                  } else {
+                    // Skip processing this incomplete chunk
+                    console.warn('Skipping incomplete JSON chunk');
+                    continue;
                   }
                   
                   console.log('Parsed event:', eventData);

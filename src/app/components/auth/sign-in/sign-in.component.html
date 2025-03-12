@@ -4,14 +4,18 @@
         <h2>Sign In</h2>
         <form id="signin-form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
             <!-- Error message display -->
-            <div class="error-message" *ngIf="errorMessage">
-                <p>{{ errorMessage }}</p>
-            </div>
+            @if (errorMessage) {
+                <div class="error-message">
+                    <p>{{ errorMessage }}</p>
+                </div>
+            }
             
             <!-- Success message display -->
-            <div class="success-message" *ngIf="successMessage">
-                <p>{{ successMessage }}</p>
-            </div>
+            @if (successMessage) {
+                <div class="success-message">
+                    <p>{{ successMessage }}</p>
+                </div>
+            }
             
             <div class="input-group">
                 <label for="email">Email</label>
@@ -23,10 +27,16 @@
                   required
                   pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
                   #email="ngModel">
-                <div class="validation-error" *ngIf="email.invalid && (email.dirty || email.touched)">
-                  <p *ngIf="email.errors?.['required']">Email is required</p>
-                  <p *ngIf="email.errors?.['pattern']">Please enter a valid email address</p>
-                </div>
+                @if (email.invalid && (email.dirty || email.touched)) {
+                  <div class="validation-error">
+                    @if (email.errors?.['required']) {
+                      <p>Email is required</p>
+                    }
+                    @if (email.errors?.['pattern']) {
+                      <p>Please enter a valid email address</p>
+                    }
+                  </div>
+                }
             </div>
             <div class="input-group">
                 <label for="password">Password</label>
@@ -38,17 +48,26 @@
                   required
                   minlength="6"
                   #password="ngModel">
-                <div class="validation-error" *ngIf="password.invalid && (password.dirty || password.touched)">
-                  <p *ngIf="password.errors?.['required']">Password is required</p>
-                  <p *ngIf="password.errors?.['minlength']">Password must be at least 6 characters</p>
-                </div>
+                @if (password.invalid && (password.dirty || password.touched)) {
+                  <div class="validation-error">
+                    @if (password.errors?.['required']) {
+                      <p>Password is required</p>
+                    }
+                    @if (password.errors?.['minlength']) {
+                      <p>Password must be at least 6 characters</p>
+                    }
+                  </div>
+                }
             </div>
             <button 
               type="submit" 
               class="signin-button"
               [disabled]="loginForm.invalid || isLoading">
-              <span *ngIf="!isLoading">Sign In</span>
-              <div class="spinner" *ngIf="isLoading"></div>
+              @if (!isLoading) {
+                <span>Sign In</span>
+              } @else {
+                <div class="spinner"></div>
+              }
             </button>
         </form>
         <div class="signup-link">

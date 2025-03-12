@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -10,6 +10,7 @@ import { AuthService } from '../../../services/auth.service';
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './sign-up.component.html',
   styleUrls: ['./sign-up.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SignUpComponent {
   registerData = {
@@ -22,7 +23,10 @@ export class SignUpComponent {
   successMessage = '';
   router = inject(Router);
   
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private cdr: ChangeDetectorRef
+  ) {}
   
   onSubmit() {
     // Reset messages
@@ -33,17 +37,20 @@ export class SignUpComponent {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(this.registerData.email)) {
       this.errorMessage = 'Please enter a valid email address';
+      this.cdr.markForCheck();
       return;
     }
     
     // Validate password length
     if (this.registerData.password.length < 6) {
       this.errorMessage = 'Password must be at least 6 characters long';
+      this.cdr.markForCheck();
       return;
     }
     
     // Set loading state
     this.isLoading = true;
+    this.cdr.markForCheck();
     
     // Call register service
     this.authService.register(this.registerData.email, this.registerData.password)
@@ -62,6 +69,7 @@ export class SignUpComponent {
           } else {
             this.errorMessage = response.message || 'Registration failed';
           }
+          this.cdr.markForCheck();
         },
         error: (error) => {
           this.isLoading = false;
@@ -78,6 +86,7 @@ export class SignUpComponent {
           } else {
             this.errorMessage = 'Registration failed. Please try again.';
           }
+          this.cdr.markForCheck();
         }
       });
   }

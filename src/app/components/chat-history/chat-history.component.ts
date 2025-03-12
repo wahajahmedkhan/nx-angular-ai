@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatService } from '../../services/chat.service';
 import { ThemeService } from '../../services/theme.service';
@@ -7,21 +7,28 @@ import { ButtonComponent } from '../../shared/ui/button/button.component';
 import { Subscription } from 'rxjs';
 import { MessageRole } from '../../models/enums';
 
+// Extend the Chat interface to include the firstUserMessage property
+interface ExtendedChat extends Chat {
+  firstUserMessage?: string | null;
+}
+
 @Component({
   selector: 'app-chat-history',
   standalone: true,
   imports: [CommonModule, ButtonComponent],
   templateUrl: './chat-history.component.html',
-  styleUrls: ['./chat-history.component.scss']
+  styleUrls: ['./chat-history.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ChatHistoryComponent implements OnInit, OnDestroy {
-  chatHistory: Chat[] = [];
+  chatHistory: ExtendedChat[] = [];
   currentChatId: string | null = null;
   private subscription = new Subscription();
   
   constructor(
     private chatService: ChatService,
-    public themeService: ThemeService
+    public themeService: ThemeService,
+    private cdr: ChangeDetectorRef
   ) {}
   
   ngOnInit(): void {
@@ -42,9 +49,20 @@ export class ChatHistoryComponent implements OnInit, OnDestroy {
   }
   
   refreshChatHistory(): void {
-    this.chatHistory = this.chatService.chatHistory();
+    const rawChatHistory = this.chatService.chatHistory();
+    
+    // Process each chat to add the firstUserMessage property
+    this.chatHistory = rawChatHistory.map(chat => {
+      const firstUserMessage = this.getFirstUserMessage(chat);
+      return {
+        ...chat,
+        firstUserMessage
+      };
+    });
+    
     const currentChat = this.chatService.currentChat();
     this.currentChatId = currentChat ? currentChat.id : null;
+    this.cdr.markForCheck();
   }
   
   onNewChat(): void {
@@ -86,8 +104,9 @@ export class ChatHistoryComponent implements OnInit, OnDestroy {
   
   /**
    * Get the first user message from a chat
+   * @private This is now a private method used only internally
    */
-  getFirstUserMessage(chat: Chat): string | null {
+  private getFirstUserMessage(chat: Chat): string | null {
     const userMessage = chat.messages.find(message => message.role === MessageRole.User);
     return userMessage ? userMessage.content : null;
   }

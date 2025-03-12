@@ -1,22 +1,52 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { SourceDocument } from '../../models/interfaces';
+
+// Interface for enhanced document with properties
+interface EnhancedDocument {
+  original: SourceDocument;
+  title: string;
+  shortTitle: string;
+}
+
+// Extended SourceDocument with additional properties
+interface ExtendedSourceDocument {
+  pageContent: string;
+  metadata: Record<string, unknown>;
+  title: string;
+  author: string;
+  lineRange: string | null;
+}
 
 @Component({
   selector: 'app-source-documents',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './source-documents.component.html',
-  styleUrls: ['./source-documents.component.scss']
+  styleUrls: ['./source-documents.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SourceDocumentsComponent implements OnInit, OnDestroy {
   sourceDocuments: SourceDocument[] = [];
-  selectedDocument: SourceDocument | null = null;
+  sourceDocumentsWithProps: EnhancedDocument[] = [];
+  selectedDocument: ExtendedSourceDocument | null = null;
+  
+  // Selected document properties for modal view
+  selectedDocumentTitle = '';
+  selectedDocumentAuthor = '';
+  selectedDocumentMetadata: string | null = null;
+  selectedDocumentLineRange: string | null = null;
+  hasMetadata = false;
+  hasLineRange = false;
+  
   private subscription = new Subscription();
   
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private cdr: ChangeDetectorRef
+  ) {}
   
   ngOnInit(): void {
     // Subscribe to source documents from the chat service
@@ -25,6 +55,8 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
         if (docs && docs.length > 0) {
           console.log('Received source documents:', docs);
           this.sourceDocuments = docs;
+          this.prepareDocumentData();
+          this.cdr.markForCheck();
         }
       })
     );
@@ -34,6 +66,8 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     if (currentChat && currentChat.sourceDocuments && currentChat.sourceDocuments.length > 0) {
       console.log('Loaded source documents from current chat:', currentChat.sourceDocuments);
       this.sourceDocuments = [...currentChat.sourceDocuments];
+      this.prepareDocumentData();
+      this.cdr.markForCheck();
     }
   }
   
@@ -43,14 +77,47 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
   
   openModal(doc: SourceDocument): void {
     console.log('Opening modal for document:', doc);
-    this.selectedDocument = doc;
+    
+    // Create extended document with additional properties
+    this.selectedDocument = {
+      pageContent: doc.pageContent,
+      metadata: doc.metadata || {},
+      title: this.getFullTitle(doc),
+      author: this.getAuthor(doc),
+      lineRange: this.getLineRange(doc)
+    };
+    
+    // Set selected document properties for display
+    this.selectedDocumentTitle = this.getFullTitle(doc);
+    this.selectedDocumentAuthor = this.getAuthor(doc);
+    
+    const metadataDisplay = this.getMetadataDisplay(doc);
+    this.selectedDocumentMetadata = metadataDisplay;
+    this.hasMetadata = !!metadataDisplay;
+    
+    const lineRange = this.getLineRange(doc);
+    this.selectedDocumentLineRange = lineRange;
+    this.hasLineRange = !!lineRange;
+    
+    this.cdr.markForCheck();
   }
   
   closeModal(): void {
     this.selectedDocument = null;
+    this.cdr.markForCheck();
   }
   
-  getShortTitle(doc: SourceDocument): string {
+  // Method to prepare all document data at once to avoid calling methods in template
+  private prepareDocumentData(): void {
+    this.sourceDocumentsWithProps = this.sourceDocuments.map(doc => ({
+      original: doc,
+      title: this.getFullTitle(doc),
+      shortTitle: this.getShortTitle(doc)
+    }));
+  }
+  
+  // Private helper methods
+  private getShortTitle(doc: SourceDocument): string {
     // Get the first key from metadata as the title
     const keys = Object.keys(doc.metadata || {});
     if (keys.length > 0) {
@@ -63,7 +130,7 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     return 'Source Document';
   }
   
-  getFullTitle(doc: SourceDocument): string {
+  private getFullTitle(doc: SourceDocument): string {
     // Get the first key from metadata as the title
     const keys = Object.keys(doc.metadata || {});
     if (keys.length > 0) {
@@ -73,7 +140,7 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     return 'Source Document';
   }
   
-  getAuthor(doc: SourceDocument): string {
+  private getAuthor(doc: SourceDocument): string {
     // Get the first key and its value from metadata as the author
     const keys = Object.keys(doc.metadata || {});
     if (keys.length > 0) {
@@ -86,7 +153,7 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     return 'Unknown Author';
   }
   
-  getLineRange(doc: SourceDocument): string | null {
+  private getLineRange(doc: SourceDocument): string | null {
     if (!doc.metadata) return null;
     
     // Handle nested loc structure
@@ -111,7 +178,7 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     return null;
   }
   
-  getMetadataDisplay(doc: SourceDocument): string | null {
+  private getMetadataDisplay(doc: SourceDocument): string | null {
     if (!doc.metadata) return null;
     
     // Filter out the title and author (first key-value pair) and format the rest

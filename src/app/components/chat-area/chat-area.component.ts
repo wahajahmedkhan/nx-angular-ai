@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, ChangeDetectorRef, effect } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, ChangeDetectorRef, effect, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
@@ -12,7 +12,8 @@ import { Message } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, FormsModule, MessageComponent],
   templateUrl: './chat-area.component.html',
-  styleUrls: ['./chat-area.component.scss']
+  styleUrls: ['./chat-area.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
   currentChat: { messages: Message[], title: string } | null = null;
@@ -34,6 +35,7 @@ export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
       if (this.currentChat) {
         this.shouldScrollToBottom = true;
       }
+      this.cdr.markForCheck();
     });
   }
   
@@ -60,17 +62,20 @@ export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
           this.shouldScrollToBottom = true;
           
           // Force change detection to ensure UI updates
-          this.cdr.detectChanges();
+          this.cdr.markForCheck();
         } else if (chunk.type === 'content') {
           this.shouldScrollToBottom = true;
+          this.cdr.markForCheck();
         } else if (chunk.type === 'agentReasoning') {
           // Handle agent reasoning events
           console.log('Received agent reasoning:', chunk.content);
           this.shouldScrollToBottom = true;
+          this.cdr.markForCheck();
         } else if (chunk.type === 'nextAgent') {
           // Handle next agent events
           console.log('Received next agent:', chunk.content);
           this.shouldScrollToBottom = true;
+          this.cdr.markForCheck();
         }
       })
     );
@@ -87,7 +92,7 @@ export class ChatAreaComponent implements OnInit, AfterViewChecked, OnDestroy {
         if (lastMessageTime && (currentTime - lastMessageTime) > 30000) {
           console.log('Loading state appears to be stuck, resetting...');
           this.isLoading = false;
-          this.cdr.detectChanges();
+          this.cdr.markForCheck();
         }
       }
     }, 10000);

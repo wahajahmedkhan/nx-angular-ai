@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ThemeService } from './services/theme.service';
@@ -8,7 +8,8 @@ import { ThemeService } from './services/theme.service';
   imports: [RouterModule, CommonModule],
   selector: 'app-root',
   template: `<router-outlet />`,
-  styles: [`:host { display: block; height: 100vh; }`]
+  styles: [`:host { display: block; height: 100vh; }`],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AppComponent {
   title = 'AI Chat';

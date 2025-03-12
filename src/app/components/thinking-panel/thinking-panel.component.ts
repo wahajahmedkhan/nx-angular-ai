@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, OnInit, OnDestroy, effect, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
@@ -9,7 +9,8 @@ import { AgentReasoningStep } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './thinking-panel.component.html',
-  styleUrls: ['./thinking-panel.component.scss']
+  styleUrls: ['./thinking-panel.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ThinkingPanelComponent implements OnInit, OnDestroy {
   reasoningSteps: AgentReasoningStep[] = [];
@@ -17,7 +18,10 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
   private subscription = new Subscription();
   private currentChatId: string | null = null;
   
-  constructor(private chatService: ChatService) {
+  constructor(
+    private chatService: ChatService,
+    private cdr: ChangeDetectorRef
+  ) {
     // Use effect to react to changes in the current chat
     effect(() => {
       const currentChat = this.chatService.currentChat();
@@ -33,10 +37,12 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
           this.reasoningSteps = [];
           this.isComplete = false;
         }
+        this.cdr.markForCheck();
       } else if (!currentChat) {
         this.currentChatId = null;
         this.reasoningSteps = [];
         this.isComplete = false;
+        this.cdr.markForCheck();
       }
     });
   }
@@ -47,6 +53,7 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
     if (currentChat && currentChat.reasoningSteps && currentChat.reasoningSteps.length > 0) {
       this.reasoningSteps = [...currentChat.reasoningSteps];
       this.isComplete = true;
+      this.cdr.markForCheck();
     }
     
     // Subscribe to thinking steps
@@ -62,6 +69,7 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
             // Update the active chat in the chat service
             this.chatService.updateReasoningSteps(this.reasoningSteps);
           }
+          this.cdr.markForCheck();
         }
       })
     );
@@ -75,8 +83,10 @@ export class ThinkingPanelComponent implements OnInit, OnDestroy {
           
           // Clear reasoning steps in the active chat as well
           this.chatService.updateReasoningSteps([]);
+          this.cdr.markForCheck();
         } else if (chunk.type === 'end') {
           this.isComplete = true;
+          this.cdr.markForCheck();
         }
       })
     );

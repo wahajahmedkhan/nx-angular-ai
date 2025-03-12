@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ThinkingPanelComponent } from '../thinking-panel/thinking-panel.component';
 import { ChatAreaComponent } from '../chat-area/chat-area.component';
@@ -10,7 +10,8 @@ import { AuthService } from '../../services/auth.service';
   standalone: true,
   imports: [CommonModule, ThinkingPanelComponent, ChatAreaComponent, ChatHistoryComponent],
   templateUrl: './chat-layout.component.html',
-  styleUrls: ['./chat-layout.component.scss']
+  styleUrls: ['./chat-layout.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ChatLayoutComponent {
   mobileView: 'chat' | 'thinking' | 'history' = 'chat';

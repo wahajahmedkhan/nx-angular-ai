@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -6,7 +6,8 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './button.component.html',
-  styleUrls: ['./button.component.scss']
+  styleUrls: ['./button.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ButtonComponent {
   @Input() variant: 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger' = 'primary';

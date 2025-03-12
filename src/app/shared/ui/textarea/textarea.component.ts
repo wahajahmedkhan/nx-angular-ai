@@ -1,4 +1,4 @@
-import { Component, Input, ElementRef, forwardRef, ViewChild, OnInit } from '@angular/core';
+import { Component, Input, ElementRef, forwardRef, ViewChild, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms';
 
@@ -8,6 +8,7 @@ import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/f
   imports: [CommonModule, FormsModule],
   templateUrl: './textarea.component.html',
   styleUrls: ['./textarea.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -30,6 +31,8 @@ export class TextareaComponent implements ControlValueAccessor, OnInit {
   
   value = '';
   
+  constructor(private cdr: ChangeDetectorRef) {}
+  
   // ControlValueAccessor implementation
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private onChange = (_value: string): void => { /* no-op */ };
@@ -50,7 +53,10 @@ export class TextareaComponent implements ControlValueAccessor, OnInit {
     this.value = value || '';
     
     // Resize on value change
-    setTimeout(() => this.autoResizeTextarea());
+    setTimeout(() => {
+      this.autoResizeTextarea();
+      this.cdr.markForCheck();
+    });
   }
   
   registerOnChange(fn: (value: string) => void): void {
@@ -63,6 +69,7 @@ export class TextareaComponent implements ControlValueAccessor, OnInit {
   
   setDisabledState(isDisabled: boolean): void {
     this.disabled = isDisabled;
+    this.cdr.markForCheck();
   }
   
   // Event handlers
@@ -86,6 +93,7 @@ export class TextareaComponent implements ControlValueAccessor, OnInit {
         this.onChange(this.value);
         this.value = '';
         this.writeValue('');
+        this.cdr.markForCheck();
       }
     }
   }

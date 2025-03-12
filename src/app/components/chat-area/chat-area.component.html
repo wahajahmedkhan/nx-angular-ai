@@ -5,18 +5,23 @@
     #messagesContainer
   >
     <div class="max-w-4xl mx-auto">
-      <div *ngIf="!currentChat?.messages?.length" class="flex flex-col items-center justify-center h-full text-center p-4">
-        <h2 class="text-xl font-bold mb-2 text-[var(--techwave-heading-color)]">Start a new conversation</h2>
-        <p class="text-[var(--techwave-body-color)] mb-6">Ask a question to begin chatting with the AI assistant</p>
-      </div>
+      @if (!currentChat?.messages?.length) {
+        <div class="flex flex-col items-center justify-center h-full text-center p-4">
+          <h2 class="text-xl font-bold mb-2 text-[var(--techwave-heading-color)]">Start a new conversation</h2>
+          <p class="text-[var(--techwave-body-color)] mb-6">Ask a question to begin chatting with the AI assistant</p>
+        </div>
+      }
       
-      <div *ngIf="currentChat?.messages?.length" class="space-y-6">
-        <app-message 
-          *ngFor="let message of currentChat?.messages" 
-          [message]="message"
-          [isLastMessage]="isLastMessage(message)"
-        />
-      </div>
+      @if (currentChat?.messages?.length) {
+        <div class="space-y-6">
+          @for (message of currentChat?.messages; track message) {
+            <app-message 
+              [message]="message"
+              [isLastMessage]="isLastMessage(message)"
+            />
+          }
+        </div>
+      }
     </div>
   </div>
   
@@ -45,9 +50,11 @@
         </button>
       </div>
       
-      <div *ngIf="isLoading" class="mt-2 text-sm text-[var(--techwave-body-color)]">
-        AI is thinking...
-      </div>
+      @if (isLoading) {
+        <div class="mt-2 text-sm text-[var(--techwave-body-color)]">
+          AI is thinking...
+        </div>
+      }
     </div>
   </div>
 </div>
