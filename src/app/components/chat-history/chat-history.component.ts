@@ -48,26 +48,39 @@ export class ChatHistoryComponent implements OnInit, OnDestroy {
   }
   
   onNewChat(): void {
+    console.log('Creating new chat');
     this.chatService.createNewChat();
-    this.refreshChatHistory();
+    // Force refresh to ensure UI updates immediately
+    setTimeout(() => {
+      this.refreshChatHistory();
+    }, 0);
   }
   
   onSelectChat(chatId: string): void {
     if (chatId !== this.currentChatId) {
+      console.log('Selecting chat:', chatId);
       this.chatService.setActiveChat(chatId);
       this.refreshChatHistory();
     }
   }
   
   onClearChat(): void {
+    console.log('Clearing current chat');
     this.chatService.clearCurrentChat();
-    this.refreshChatHistory();
+    // Force refresh to ensure UI updates immediately
+    setTimeout(() => {
+      this.refreshChatHistory();
+    }, 0);
   }
   
   onDeleteChat(): void {
     if (this.currentChatId) {
+      console.log('Deleting chat:', this.currentChatId);
       this.chatService.deleteChat(this.currentChatId);
-      this.refreshChatHistory();
+      // Force refresh to ensure UI updates immediately
+      setTimeout(() => {
+        this.refreshChatHistory();
+      }, 0);
     }
   }
   

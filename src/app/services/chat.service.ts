@@ -1195,6 +1195,8 @@ export class ChatService {
    * Delete a chat by ID
    */
   deleteChat(chatId: string): void {
+    console.log('Deleting chat:', chatId);
+    
     // Remove from chats list
     this.chats.update(chats => chats.filter(chat => chat.id !== chatId));
     
@@ -1208,6 +1210,16 @@ export class ChatService {
         this.createNewChat();
       }
     }
+    
+    // Notify subscribers about the chat deletion
+    this.messageChunksSubject.next({
+      type: ChunkType.End, 
+      content: `Chat deleted`,
+      messageId: 'system-notification'
+    });
+    
+    // Save changes to storage
+    this.saveChatsToStorage();
   }
   
   /**
@@ -1215,6 +1227,8 @@ export class ChatService {
    */
   clearCurrentChat(): void {
     if (!this.activeChat()) return;
+    
+    console.log('Clearing current chat');
     
     this.activeChat.update(chat => {
       if (!chat) return null;
@@ -1224,12 +1238,28 @@ export class ChatService {
         messages: [],
         title: 'New Chat',
         updatedAt: new Date(),
-        flowChatId: undefined // Clear FlowWise chatId to start a new conversation
+        flowChatId: undefined, // Clear FlowWise chatId to start a new conversation
+        reasoningSteps: [], // Clear reasoning steps
+        sourceDocuments: [] // Clear source documents
       };
     });
     
     // Update in chats list
     this.updateChatInList();
+    
+    // Notify subscribers about the chat clearing
+    this.messageChunksSubject.next({
+      type: ChunkType.End, 
+      content: `Chat cleared`,
+      messageId: 'system-notification'
+    });
+    
+    // Clear thinking and source documents
+    this.thinkingSubject.next(null);
+    this.sourceDocumentsSubject.next([]);
+    
+    // Save changes to storage
+    this.saveChatsToStorage();
   }
   
   /**

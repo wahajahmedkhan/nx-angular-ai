@@ -16,6 +16,7 @@ export class ButtonComponent {
   @Input() fullWidth = false;
 
   @Output() clicked = new EventEmitter<MouseEvent>();
+  @Output() buttonClick = new EventEmitter<MouseEvent>();
 
   get buttonClasses(): string {
     const baseClasses = 'inline-flex items-center justify-center';
