@@ -1,5 +1,5 @@
 import { Injectable, signal, computed, effect } from '@angular/core';
-import { BehaviorSubject, Observable, Subject, catchError, lastValueFrom, of } from 'rxjs';
+import { BehaviorSubject, Subject, catchError, lastValueFrom } from 'rxjs';
 import { 
   Chat, 
   Message, 
@@ -26,8 +26,8 @@ export class ChatService {
   private sourceDocumentsSubject = new BehaviorSubject<SourceDocument[]>([]);
   
   // Buffer for collecting source document events
-  private sourceDocumentBuffer: string = '';
-  private isCollectingSourceDocuments: boolean = false;
+  private sourceDocumentBuffer = '';
+  private isCollectingSourceDocuments = false;
   
   // API endpoint
   private readonly FLOWWISE_API_URL = 'http://135.181.181.121:3000/api/v1/prediction/a180e12e-d360-47fd-9fbd-443dcc3a5d1d';
@@ -184,7 +184,7 @@ export class ChatService {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedText = '';
-      let sourceDocuments: any[] = [];
+      const sourceDocuments: any[] = [];
       let hasEnded = false;
       let receivedMetadata = false;
       let hasReceivedContent = false;
@@ -1414,6 +1414,7 @@ export class ChatService {
                 return validJson;
               } catch (e) {
                 // Continue searching
+                console.log('Failed to parse JSON:', e);
               }
             }
           }

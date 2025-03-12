@@ -18,7 +18,7 @@
   <div class="flex flex-1 overflow-hidden">
     <!-- Left Sidebar - Thinking -->
     <div class="w-[25%] hidden lg:block border-r border-[var(--techwave-border-color)] bg-[var(--techwave-some-r-bg-color)]">
-      <app-thinking-panel></app-thinking-panel>
+      <app-thinking-panel />
     </div>
     
     <!-- Main Chat Area - Wider on medium screens, full on mobile -->
@@ -44,13 +44,13 @@
       
       <!-- Main content area -->
       <div class="flex-1 overflow-hidden">
-        <app-chat-area></app-chat-area>
+        <app-chat-area />
       </div>
     </div>
     
     <!-- Right Sidebar - History -->
     <div class="w-72 hidden lg:block border-l border-[var(--techwave-border-color)] bg-[var(--techwave-some-r-bg-color)]">
-      <app-chat-history></app-chat-history>
+      <app-chat-history />
     </div>
     
     <!-- Mobile View Overlays with slide-in animation -->
@@ -69,7 +69,7 @@
           </button>
         </div>
         <div class="h-[calc(100%-65px)] overflow-auto">
-          <app-thinking-panel></app-thinking-panel>
+          <app-thinking-panel />
         </div>
       </div>
     </div>
@@ -89,7 +89,7 @@
           </button>
         </div>
         <div class="h-[calc(100%-65px)] overflow-auto">
-          <app-chat-history></app-chat-history>
+          <app-chat-history />
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import { ThemeService } from './services/theme.service';
   standalone: true,
   imports: [RouterModule, CommonModule],
   selector: 'app-root',
-  template: `<router-outlet></router-outlet>`,
+  template: `<router-outlet />`,
   styles: [`:host { display: block; height: 100vh; }`]
 })
 export class AppComponent {

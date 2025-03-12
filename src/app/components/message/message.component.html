@@ -27,7 +27,7 @@
       ></div>
       
       <!-- Source Documents (only shown for completed AI messages) -->
-      <app-source-documents *ngIf="message.role === 'assistant' && message.isComplete && !isErrorMessage"></app-source-documents>
+      <app-source-documents *ngIf="message.role === 'assistant' && message.isComplete && !isErrorMessage" />
       
       <!-- For error messages -->
       <div 
