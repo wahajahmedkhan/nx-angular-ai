@@ -9,6 +9,11 @@
     height: 100vh;
 }
 
+/* Dark mode styles */
+:host-context(.dark) .parent {
+    background-color: #1a1a2e;
+}
+
 /* Sign Up Container */
 .signup-container {
     width: 100%;
@@ -26,10 +31,21 @@
     text-align: center;
 }
 
+/* Dark mode styles */
+:host-context(.dark) .signup-box {
+    background-color: #222236;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 .signup-box h2 {
     margin-bottom: 20px;
     font-size: 24px;
     color: #333;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .signup-box h2 {
+    color: #ffffff;
 }
 
 /* Input Groups */
@@ -45,6 +61,11 @@
     color: #555;
 }
 
+/* Dark mode styles */
+:host-context(.dark) .input-group label {
+    color: #d0d0d0;
+}
+
 .input-group input {
     width: 100%;
     padding: 10px;
@@ -52,12 +73,26 @@
     border-radius: 4px;
     font-size: 16px;
     box-sizing: border-box;
+    transition: border-color 0.3s, background-color 0.3s, color 0.3s;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .input-group input {
+    background-color: #2c2c40;
+    border-color: #3f3f5a;
+    color: #ffffff;
 }
 
 .input-group input:focus {
     outline: none;
     border-color: #4a90e2;
     box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Dark mode styles */
+:host-context(.dark) .input-group input:focus {
+    border-color: #5a9ae8;
+    box-shadow: 0 0 0 2px rgba(90, 154, 232, 0.25);
 }
 
 /* Sign Up Button */
@@ -77,13 +112,29 @@
     height: 45px;
 }
 
+/* Dark mode styles */
+:host-context(.dark) .signup-button {
+    background-color: #4a7bdb;
+}
+
 .signup-button:hover {
     background-color: #0056b3;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .signup-button:hover {
+    background-color: #3a6bc8;
 }
 
 .signup-button:disabled {
     background-color: #a0c1e8;
     cursor: not-allowed;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .signup-button:disabled {
+    background-color: #3a4a6a;
+    color: #a0a0a0;
 }
 
 /* Log In Link */
@@ -93,11 +144,21 @@
     color: #555;
 }
 
+/* Dark mode styles */
+:host-context(.dark) .login-link {
+    color: #d0d0d0;
+}
+
 .login-link a {
     color: #007bff;
     text-decoration: none;
     font-weight: 500;
     cursor: pointer;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .login-link a {
+    color: #5a9ae8;
 }
 
 .login-link a:hover {
@@ -117,9 +178,23 @@
     border-left: 4px solid #d32f2f;
 }
 
+/* Dark mode styles */
+:host-context(.dark) .error-message {
+    background-color: rgba(211, 47, 47, 0.2);
+    color: #ff6b6b;
+    border-left: 4px solid #d32f2f;
+}
+
 .success-message {
     background-color: #e8f5e9;
     color: #2e7d32;
+    border-left: 4px solid #2e7d32;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .success-message {
+    background-color: rgba(46, 125, 50, 0.2);
+    color: #66bb6a;
     border-left: 4px solid #2e7d32;
 }
 
@@ -131,6 +206,12 @@
     margin-bottom: 0;
     font-size: 14px;
     border-radius: 4px;
+}
+
+/* Dark mode styles */
+:host-context(.dark) .validation-error {
+    background-color: rgba(211, 47, 47, 0.2);
+    color: #ff6b6b;
 }
 
 .validation-error p {
