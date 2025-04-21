@@ -420,11 +420,10 @@ export class ChatService {
     // Update the current event signal
     this.currentEvent.set(event.event);
     
-    let message;
-    let errorMessage;
-    let metadata;
-    let sourceDocuments;
-    let reasoningStep;
+    let errorMessage: string | null = null;
+    let metadata: Record<string, unknown> | undefined;
+    let sourceDocuments: SourceDocument[] = [];
+    let reasoningStep: AgentReasoningStep | undefined;
     
     // Process the event based on its type
     switch (event.event) {
@@ -441,22 +440,26 @@ export class ChatService {
         break;
         
       case 'token':
-        // This is the actual content
-        if (typeof event.data === 'string') {
-          // Send the token as a message chunk
-          this.messageChunksSubject.next({
-            type: ChunkType.Content,
-            content: event.data,
-            messageId
-          });
+        {
+          // Process token event (text content)
+          const tokenMessage = typeof event.data === 'string' ? event.data : '';
           
-          // Update the message in the chat
-          this.updateMessage(messageId, event.data, false, true); // Append mode
+          if (tokenMessage) {
+            // Send token as a message chunk
+            this.messageChunksSubject.next({
+              type: ChunkType.Content,
+              content: tokenMessage,
+              messageId
+            });
+            
+            // Update message in chat (append token)
+            this.updateMessage(messageId, tokenMessage, false, true);
+          }
         }
         break;
         
       case 'end':
-        console.log('Stream ended normally');
+        console.log('Stream ended');
         // Set processing state to false
         this.isProcessing.set(false);
         
@@ -467,9 +470,11 @@ export class ChatService {
         });
         
         // Mark message as complete
-        message = this.getMessageById(messageId);
-        if (message) {
-          this.updateMessage(messageId, message.content, true);
+        {
+          const existingMessage = this.getMessageById(messageId);
+          if (existingMessage) {
+            this.updateMessage(messageId, existingMessage.content, true);
+          }
         }
         break;
         
@@ -516,9 +521,41 @@ export class ChatService {
         console.log('Received source documents:', event.data);
         
         // Process source documents
-        if (Array.isArray(event.data)) {
-          sourceDocuments = event.data;
-          this.sourceDocumentsSubject.next(sourceDocuments);
+        sourceDocuments = Array.isArray(event.data) ? event.data : [];
+        
+        // Ensure each document has an ID
+        sourceDocuments = sourceDocuments.map(doc => ({
+          ...doc,
+          id: doc.id || uuidv4()
+        }));
+        
+        // Store source documents in the active chat
+        this.activeChat.update(chat => {
+          if (!chat) return null;
+          return {
+            ...chat,
+            sourceDocuments
+          };
+        });
+        
+        // Update chats list and save to storage
+        this.updateChatInList();
+        this.saveChatsToStorage();
+        
+        // Update the subject for components to react
+        // This will not cause an infinite loop since we removed the updateSourceDocuments call in the component
+        this.sourceDocumentsSubject.next(sourceDocuments);
+        
+        {
+          // Send source documents as a message chunk
+          const docsContent = this.formatSourceDocuments(sourceDocuments);
+          if (docsContent) {
+            this.messageChunksSubject.next({
+              type: ChunkType.SourceDocuments,
+              content: docsContent,
+              messageId
+            });
+          }
         }
         break;
         
@@ -1261,5 +1298,42 @@ export class ChatService {
     this.saveChatsToStorage();
     
     console.log('Updated reasoning steps in active chat:', cleanedSteps.length);
+  }
+  
+  /**
+   * Update source documents in the active chat and persist to storage
+   */
+  public updateSourceDocuments(documents: SourceDocument[]): void {
+    if (!documents || documents.length === 0) return;
+    
+    console.log('Updating source documents in active chat:', documents.length);
+    
+    // Process documents to ensure they don't have circular references
+    const cleanedDocuments = documents.map(doc => ({
+      id: doc.id || uuidv4(), // Ensure each document has an ID
+      pageContent: doc.pageContent,
+      metadata: doc.metadata ? JSON.parse(JSON.stringify(doc.metadata)) : {
+        source: 'Unknown Source',
+        blobType: 'text/plain'
+      }
+    }));
+    
+    // Update the active chat
+    this.activeChat.update(chat => {
+      if (!chat) return null;
+      return {
+        ...chat,
+        sourceDocuments: cleanedDocuments
+      };
+    });
+    
+    // Update chats list to persist the source documents
+    this.updateChatInList();
+    
+    // Immediately save to storage to ensure persistence
+    this.saveChatsToStorage();
+    
+    // Update the subject for components to react
+    this.sourceDocumentsSubject.next(cleanedDocuments);
   }
 }
