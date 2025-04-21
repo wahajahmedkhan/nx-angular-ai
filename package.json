@@ -4,8 +4,10 @@
   "license": "MIT",
   "scripts": {
     "start": "nx serve",
-    "build": "nx build",
-    "test": "nx test"
+    "build": "node scripts/generate-version.js && nx build",
+    "build:prod": "node scripts/generate-version.js && nx build --prod",
+    "test": "nx test",
+    "version:generate": "node scripts/generate-version.js"
   },
   "private": true,
   "dependencies": {

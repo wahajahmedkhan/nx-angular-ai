@@ -12,8 +12,8 @@ RUN npm ci
 # Copy the rest of the application code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application with version generation
+RUN npm run build:prod
 
 # Stage 2: Serve the application using Nginx
 FROM nginx:1.25-alpine
