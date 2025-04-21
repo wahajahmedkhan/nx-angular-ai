@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRe
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
-import { SourceDocument } from '../../models/interfaces';
+import { SourceDocument } from '../../models/chat.interfaces';
 
 // Interface for enhanced document with properties
 interface EnhancedDocument {
@@ -145,8 +145,8 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     const keys = Object.keys(doc.metadata || {});
     if (keys.length > 0) {
       const titleKey = keys[0];
-      if (doc.metadata && doc.metadata[titleKey]) {
-        return doc.metadata[titleKey];
+      if (doc.metadata && doc.metadata[titleKey] && typeof doc.metadata[titleKey] === 'string') {
+        return doc.metadata[titleKey] as string;
       }
     }
     

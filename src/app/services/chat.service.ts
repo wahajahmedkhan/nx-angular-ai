@@ -5,15 +5,15 @@ import {
   Message, 
   MessageChunk, 
   FlowWiseRequest, 
-  FlowWiseResponse, 
-  AgentReasoningStep,
+  FlowWiseResponse,
   FlowWiseStreamEvent,
-  FlowWiseMetadata,
+  AgentReasoningStep,
   SourceDocument
-} from '../models/interfaces';
+} from '../models/chat.interfaces';
 import { ChunkType, MessageRole } from '../models/enums';
 import { v4 as uuidv4 } from 'uuid';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { environment } from '../../environment';
 
 @Injectable({
   providedIn: 'root',
@@ -25,12 +25,16 @@ export class ChatService {
   private thinkingSubject = new BehaviorSubject<AgentReasoningStep | null>(null);
   private sourceDocumentsSubject = new BehaviorSubject<SourceDocument[]>([]);
   
+  // UI state signals
+  private isProcessing = signal<boolean>(false);
+  private currentEvent = signal<string | null>(null);
+  
   // Buffer for collecting source document events
   private sourceDocumentBuffer = '';
   private isCollectingSourceDocuments = false;
   
   // API endpoint
-  private readonly FLOWWISE_API_URL = 'http://135.181.181.121:3000/api/v1/prediction/a180e12e-d360-47fd-9fbd-443dcc3a5d1d';
+  private readonly FLOWWISE_API_URL = environment.FLOWWISE_API_URL;
   
   // Observable for message chunks (for streaming responses)
   public messageChunks$ = this.messageChunksSubject.asObservable();
@@ -44,6 +48,11 @@ export class ChatService {
   // Computed values
   public currentChat = computed(() => this.activeChat());
   public chatHistory = computed(() => this.chats());
+  
+  // UI state computed values
+  public isAiThinking = computed(() => this.isProcessing());
+  public shouldDisableInput = computed(() => this.isProcessing());
+  public currentEventType = computed(() => this.currentEvent());
   
   constructor(private http: HttpClient) {
     this.loadChatsFromStorage();
@@ -141,9 +150,8 @@ export class ChatService {
     
     // Always include chatId and sessionId if available for conversation continuity
     if (chat.flowChatId) {
-      // Use chatId directly in the payload
       payload.chatId = chat.flowChatId;
-      console.log('Using existing flowChatId as chatId:', chat.flowChatId);
+      console.log('Using existing flowChatId:', chat.flowChatId);
       
       // Log the number of messages in the current chat for context
       console.log(`Current chat has ${chat.messages.length} messages (including this new one)`);
@@ -165,824 +173,444 @@ export class ChatService {
   /**
    * Stream response from FlowWise API using fetch and EventSource
    */
-  private async streamFlowWiseResponse(requestPayload: FlowWiseRequest, messageId: string): Promise<void> {
-    try {
-      console.log('Streaming request payload:', requestPayload);
-      const response = await fetch(this.FLOWWISE_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
-      });
-      
-      if (!response.ok || !response.body) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      console.log('Got streaming response, processing...');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedText = '';
-      const sourceDocuments: any[] = [];
-      let hasEnded = false;
-      let receivedMetadata = false;
-      let hasReceivedContent = false;
-      
-      // Capture requestPayload in this scope for use in event processing
-      const originalRequestPayload = { ...requestPayload };
-      
-      // Process the stream
-      const processStream = async () => {
-        let done = false;
+  private streamFlowWiseResponse(requestPayload: FlowWiseRequest, messageId: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        console.log('Starting FlowWise API stream with payload:', requestPayload);
         
-        while (!done) {
-          try {
-            const { value, done: doneReading } = await reader.read();
-            done = doneReading;
+        // Set processing state to true
+        this.isProcessing.set(true);
+        
+        // Prepare the request
+        fetch(this.FLOWWISE_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestPayload)
+        }).then(async (response) => {
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('FlowWise API error:', response.status, errorText);
             
-            if (done) break;
-            
-            // Decode the chunk and split by lines
-            const chunk = decoder.decode(value, { stream: true });
-            console.log('Received chunk:', chunk);
-            
-            // Parse the chunk - Flowise format is message:\ndata:{...}
-            const messages = chunk.split('message:');
-            
-            for (const message of messages) {
-              if (!message.trim()) continue;
-              
-              // Extract data part
-              const dataMatch = message.match(/data:(.*?)(?=\n\n|$)/s);
-              if (dataMatch && dataMatch[1]) {
-                try {
-                  // Try to parse the JSON data
-                  const jsonData = dataMatch[1].trim();
-                  
-                  // Check if the JSON is potentially incomplete or malformed
-                  let eventData;
-                  let isCompleteJson = true;
-                  
-                  // Check for common signs of incomplete JSON
-                  if (jsonData.includes('"event":') && !jsonData.endsWith('}')) {
-                    isCompleteJson = false;
-                    console.warn('Detected incomplete JSON, waiting for more data');
-                    continue; // Skip this chunk and wait for more data
-                  }
-                  
-                  // Check for unterminated strings (look for odd number of unescaped quotes)
-                  let quoteCount = 0;
-                  let i = 0;
-                  while (i < jsonData.length) {
-                    if (jsonData[i] === '\\' && i + 1 < jsonData.length) {
-                      i += 2; // Skip escaped character
-                      continue;
-                    }
-                    if (jsonData[i] === '"') {
-                      quoteCount++;
-                    }
-                    i++;
-                  }
-                  
-                  if (quoteCount % 2 !== 0) {
-                    isCompleteJson = false;
-                    console.warn('Detected unterminated string in JSON, waiting for more data');
-                    continue; // Skip this chunk and wait for more data
-                  }
-                  
-                  // Check for balanced braces and brackets
-                  let openBraces = 0;
-                  let openBrackets = 0;
-                  let inString = false;
-                  let escapeNext = false;
-                  
-                  for (let i = 0; i < jsonData.length; i++) {
-                    const char = jsonData[i];
-                    
-                    if (escapeNext) {
-                      escapeNext = false;
-                      continue;
-                    }
-                    
-                    if (char === '\\') {
-                      escapeNext = true;
-                      continue;
-                    }
-                    
-                    if (char === '"' && !escapeNext) {
-                      inString = !inString;
-                      continue;
-                    }
-                    
-                    if (!inString) {
-                      if (char === '{') {
-                        openBraces++;
-                      } else if (char === '}') {
-                        openBraces--;
-                      } else if (char === '[') {
-                        openBrackets++;
-                      } else if (char === ']') {
-                        openBrackets--;
-                      }
-                    }
-                  }
-                  
-                  if (openBraces !== 0 || openBrackets !== 0) {
-                    isCompleteJson = false;
-                    console.warn('Detected unbalanced braces/brackets in JSON, waiting for more data');
-                    continue; // Skip this chunk and wait for more data
-                  }
-                  
-                  // Only try to parse if we believe the JSON is complete
-                  if (isCompleteJson) {
-                    try {
-                      eventData = JSON.parse(jsonData);
-                    } catch (parseError) {
-                      console.warn('JSON parse error despite completeness checks:', parseError);
-                      
-                      // Try to fix common JSON issues as a fallback
-                      const fixedJson = this.attemptToFixMalformedJson(jsonData);
-                      
-                      if (fixedJson) {
-                        console.log('Attempting to parse fixed JSON');
-                        eventData = JSON.parse(fixedJson);
-                      } else {
-                        // If we can't fix it, skip this chunk and wait for more data
-                        console.warn('Could not fix JSON, waiting for more data');
-                        continue;
-                      }
-                    }
-                  } else {
-                    // Skip processing this incomplete chunk
-                    console.warn('Skipping incomplete JSON chunk');
-                    continue;
-                  }
-                  
-                  console.log('Parsed event:', eventData);
-                  
-                  // Check if this is a metadata event
-                  if (eventData.event === 'metadata') {
-                    receivedMetadata = true;
-                  }
-                  
-                  // Process based on event type
-                  if (eventData.event === 'token' && typeof eventData.data === 'string') {
-                    // This is the actual content
-                    accumulatedText = eventData.data; // Replace with full text instead of appending
-                    hasReceivedContent = true;
-                    
-                    // Update the message content
-                    this.updateMessage(messageId, accumulatedText);
-                    
-                    // Send content chunk
-                    this.messageChunksSubject.next({
-                      type: ChunkType.Content,
-                      content: eventData.data,
-                      messageId
-                    });
-                  } 
-                  else if (eventData.event === 'start') {
-                    // Stream started
-                    this.messageChunksSubject.next({
-                      type: ChunkType.Start,
-                      messageId
-                    });
-                  }
-                  else if (eventData.event === 'end') {
-                    // Stream ended
-                    hasEnded = true;
-                    console.log('Stream ended, marking message as complete');
-                    
-                    // If we haven't received any content but the stream ended, 
-                    // this might be an empty response (like for "what was my last question?")
-                    if (!hasReceivedContent && eventData.data === '[DONE]') {
-                      console.log('Empty response detected, adding placeholder text');
-                      let placeholderText = 'I understand your question, but I don\'t have a specific response for that.';
-                      
-                      // Special handling for "what was my last question" queries
-                      if (originalRequestPayload.question.toLowerCase().includes('what was my last question')) {
-                        // Get the actual last question from chat history
-                        const currentChat = this.activeChat();
-                        if (currentChat && currentChat.messages.length > 2) {
-                          // Find the last user message that isn't the current "what was my last question" query
-                          const userMessages = currentChat.messages.filter(msg => 
-                            msg.role === MessageRole.User && 
-                            !msg.content.toLowerCase().includes('what was my last question')
-                          );
-                          
-                          if (userMessages.length > 0) {
-                            const lastQuestion = userMessages[userMessages.length - 1].content;
-                            placeholderText = `Your last question was: "${lastQuestion}"`;
-                            console.log('Found last question:', lastQuestion);
-                          } else {
-                            placeholderText = "I don't see any previous questions in our conversation history.";
-                          }
-                        } else {
-                          placeholderText = "I don't see any previous questions in our conversation history.";
-                        }
-                      }
-                      
-                      accumulatedText = placeholderText;
-                      this.updateMessage(messageId, placeholderText);
-                      
-                      // Send content chunk for the placeholder
-                      this.messageChunksSubject.next({
-                        type: ChunkType.Content,
-                        content: placeholderText,
-                        messageId
-                      });
-                    }
-                    
-                    // Mark message as complete with final content
-                    this.updateMessage(messageId, accumulatedText, true);
-                    
-                    // Send end event
-                    this.messageChunksSubject.next({
-                      type: ChunkType.End,
-                      messageId
-                    });
-                    
-                    // Check if this is a [DONE] event
-                    if (eventData.data === '[DONE]') {
-                      console.log('Received [DONE] event, ensuring loading state is reset');
-                      
-                      // Send an extra end event after a short delay to ensure UI is updated
-                      setTimeout(() => {
-                        this.messageChunksSubject.next({
-                          type: ChunkType.End,
-                          messageId
-                        });
-                      }, 500);
-                    }
-                  }
-                  else if (eventData.event === 'error') {
-                    console.error('Stream error:', eventData.data);
-                    
-                    // Extract the specific error message
-                    let errorMessage = 'An error occurred while processing your request.';
-                    
-                    if (typeof eventData.data === 'string') {
-                      // Check for specific error types
-                      if (eventData.data.includes('ENOTFOUND')) {
-                        errorMessage = 'Unable to connect to the AI service. The server appears to be offline or unreachable. Please try again later.';
-                      } else if (eventData.data.includes('timeout')) {
-                        errorMessage = 'The request to the AI service timed out. Please try again later.';
-                      } else {
-                        // Use the original error but make it more user-friendly
-                        errorMessage = `AI service error: ${eventData.data.replace(/Error:?\s*/g, '')}`;
-                      }
-                    }
-                    
-                    this.messageChunksSubject.next({
-                      type: ChunkType.Error,
-                      messageId,
-                      content: errorMessage
-                    });
-                    
-                    // Mark message as complete with error content
-                    this.updateMessage(messageId, errorMessage, true);
-                  }
-                  else if (eventData.event === 'metadata' && typeof eventData.data === 'object' && eventData.data !== null) {
-                    // Store chatId for session continuity if it exists
-                    const metadata = eventData.data as FlowWiseMetadata;
-                    console.log('Received metadata event:', metadata);
-                    
-                    // Log the question that was asked to verify context
-                    if (metadata.question) {
-                      console.log('Question in metadata:', metadata.question);
-                    }
-                    
-                    // Log memory type if available
-                    if (metadata.memoryType) {
-                      console.log('Memory type:', metadata.memoryType);
-                    }
-                    
-                    // Check if both chatId and sessionId are provided
-                    if (metadata.chatId && metadata.sessionId) {
-                      console.log('Received both chatId and sessionId from server:', {
-                        chatId: metadata.chatId,
-                        sessionId: metadata.sessionId
-                      });
-                      
-                      // Log if there's a mismatch between sent chatId and received chatId
-                      if (originalRequestPayload.chatId && metadata.chatId !== originalRequestPayload.chatId) {
-                        console.warn('ChatId mismatch detected!', {
-                          sent: originalRequestPayload.chatId,
-                          received: metadata.chatId
-                        });
-                      }
-                      
-                      this.activeChat.update(chat => {
-                        if (!chat) return null;
-                        return {
-                          ...chat,
-                          flowChatId: metadata.chatId,
-                          sessionId: metadata.sessionId
-                        };
-                      });
-                      
-                      // Update chats list
-                      this.updateChatInList();
-                      
-                      // Log that we've stored both IDs for future use
-                      console.log('Stored chatId and sessionId for future requests:', {
-                        chatId: metadata.chatId,
-                        sessionId: metadata.sessionId
-                      });
-                    } 
-                    // If only chatId is provided
-                    else if (metadata.chatId) {
-                      console.log('Received only chatId from server:', metadata.chatId);
-                      
-                      this.activeChat.update(chat => {
-                        if (!chat) return null;
-                        return {
-                          ...chat,
-                          flowChatId: metadata.chatId
-                        };
-                      });
-                      
-                      // Update chats list
-                      this.updateChatInList();
-                      
-                      // Log that we've stored the chatId for future use
-                      console.log('Stored chatId for future requests:', metadata.chatId);
-                    } else {
-                      console.warn('No chatId found in metadata event:', metadata);
-                    }
-                  }
-                  else if (eventData.event === 'sourceDocuments' && Array.isArray(eventData.data)) {
-                    // Process source documents
-                    const sourceDocuments = eventData.data as SourceDocument[];
-                    if (sourceDocuments.length > 0) {
-                      console.log('Received source documents:', sourceDocuments);
-                      
-                      // Store source documents in the active chat
-                      this.activeChat.update(chat => {
-                        if (!chat) return null;
-                        return {
-                          ...chat,
-                          sourceDocuments: sourceDocuments
-                        };
-                      });
-                      
-                      // Update chats list to persist the source documents
-                      this.updateChatInList();
-                      
-                      // Immediately save to storage to ensure persistence
-                      this.saveChatsToStorage();
-                      
-                      // Emit source documents to subscribers
-                      this.sourceDocumentsSubject.next(sourceDocuments);
-                    }
-                  }
-                  else if (eventData.event === 'agentReasoning' && Array.isArray(eventData.data)) {
-                    // Process agent reasoning for thinking panel
-                    const reasoningSteps = eventData.data as AgentReasoningStep[];
-                    if (reasoningSteps.length > 0) {
-                      // Process each step to ensure it doesn't have any circular references or complex objects
-                      const cleanedSteps = reasoningSteps.map(step => ({
-                        agentName: step.agentName,
-                        messages: [...(step.messages || [])],
-                        next: step.next,
-                        instructions: step.instructions,
-                        usedTools: step.usedTools ? JSON.parse(JSON.stringify(step.usedTools)) : undefined,
-                        sourceDocuments: step.sourceDocuments ? JSON.parse(JSON.stringify(step.sourceDocuments)) : undefined,
-                        artifacts: step.artifacts ? JSON.parse(JSON.stringify(step.artifacts)) : undefined,
-                        nodeId: step.nodeId,
-                        thought: step.thought,
-                        action: step.action,
-                        observation: step.observation
-                      }));
-                      
-                      // Store reasoning steps in the active chat
-                      this.activeChat.update(chat => {
-                        if (!chat) return null;
-                        return {
-                          ...chat,
-                          reasoningSteps: cleanedSteps
-                        };
-                      });
-                      
-                      // Immediately save to storage to ensure persistence
-                      this.saveChatsToStorage();
-                      
-                      // Update chats list to persist the reasoning steps
-                      this.updateChatInList();
-                      
-                      // Process each reasoning step
-                      reasoningSteps.forEach((step, index) => {
-                        setTimeout(() => {
-                          this.thinkingSubject.next(step);
-                          
-                          // Also send thinking as a message chunk
-                          const thinkingContent = this.formatThinkingStep(step);
-                          this.messageChunksSubject.next({
-                            type: ChunkType.AgentReasoning,
-                            content: thinkingContent,
-                            messageId
-                          });
-                        }, index * 800); // Spread them out a bit for visual effect
-                      });
-                    }
-                  }
-                  else if (eventData.event === 'nextAgent' && typeof eventData.data === 'string') {
-                    // Handle nextAgent event - this indicates which agent is processing next
-                    console.log('Next agent:', eventData.data);
-                    
-                    // Send nextAgent as a message chunk
-                    this.messageChunksSubject.next({
-                      type: ChunkType.NextAgent,
-                      content: eventData.data,
-                      messageId
-                    });
-                    
-                    // Optionally update the thinking panel with the next agent
-                    this.thinkingSubject.next({
-                      agentName: eventData.data,
-                      messages: [`Processing with ${eventData.data}...`],
-                      nodeId: 'nextAgent'
-                    });
-                  }
-                } catch (error) {
-                  console.error('Error processing stream event:', error, dataMatch[1]);
-                  
-                  // Try to recover by continuing with the next message
-                  // Don't let a single parsing error stop the entire stream processing
-                  
-                  // If we have accumulated text, update the message with what we have so far
-                  if (accumulatedText) {
-                    this.updateMessage(messageId, accumulatedText);
-                  }
-                  
-                  // If this is a critical error that prevents further processing, send an error message
-                  if (hasEnded === false) {
-                    this.messageChunksSubject.next({
-                      type: ChunkType.Error,
-                      messageId,
-                      content: 'Error processing response. Please try again.'
-                    });
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Error processing stream chunk:', error);
-            // Handle chunk processing errors
-            this.messageChunksSubject.next({
-              type: ChunkType.Error,
-              messageId,
-              content: 'Error processing response from AI service. Please try again.'
-            });
-            
+            // Update the message with error
             this.updateMessage(
-              messageId,
-              'Error processing response from AI service. Please try again.',
+              messageId, 
+              `Error: ${response.status} - ${errorText || 'Unknown error'}`, 
               true
             );
             
-            break; // Exit the loop on error
-          }
-        }
-        
-        // If we didn't get an end event but the stream is done, send an end event
-        if (!hasEnded) {
-          console.log('Stream completed without end event, marking message as complete');
-          
-          // Check for empty response case
-          if (!hasReceivedContent) {
-            console.log('No content received in the stream, adding placeholder text');
-            const placeholderText = 'I received your question but don\'t have a specific response.';
-            accumulatedText = placeholderText;
+            // Set processing state to false
+            this.isProcessing.set(false);
             
-            // Send content chunk for the placeholder
-            this.messageChunksSubject.next({
-              type: ChunkType.Content,
-              content: placeholderText,
-              messageId
-            });
+            reject(new Error(`API error: ${response.status}`));
+            return;
           }
           
-          // Mark message as complete
-          this.updateMessage(messageId, accumulatedText, true);
+          if (!response.body) {
+            console.error('No response body received');
+            
+            // Update the message with error
+            this.updateMessage(messageId, 'Error: No response received', true);
+            
+            // Set processing state to false
+            this.isProcessing.set(false);
+            
+            reject(new Error('No response body'));
+            return;
+          }
           
-          // Send end event
-          this.messageChunksSubject.next({
-            type: ChunkType.End,
-            messageId
+          // Get the reader from the response body
+          const reader = response.body.getReader();
+          
+          // Buffer for collecting JSON data
+          let buffer = '';
+          
+          // Process the stream
+          const processStream = async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                  console.log('Stream complete');
+                  
+                  // Process any remaining data in the buffer
+                  if (buffer.trim()) {
+                    try {
+                      const event = JSON.parse(buffer);
+                      this.processStreamEvent(event, messageId);
+                    } catch (_e) {
+                      // Try to fix and parse the JSON
+                      const fixedJson = this.attemptToFixMalformedJson(buffer);
+                      if (fixedJson) {
+                        try {
+                          const event = JSON.parse(fixedJson);
+                          this.processStreamEvent(event, messageId);
+                        } catch (_e2) {
+                          console.error('Failed to parse fixed JSON at stream end');
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Set processing state to false if not already done by an 'end' event
+                  this.isProcessing.set(false);
+                  
+                  // Send end chunk if not already sent
+                  this.messageChunksSubject.next({
+                    type: ChunkType.End,
+                    messageId
+                  });
+                  
+                  // Mark message as complete if not already done
+                  const message = this.getMessageById(messageId);
+                  if (message && !message.isComplete) {
+                    this.updateMessage(messageId, message.content, true);
+                  }
+                  
+                  break;
+                }
+                
+                // Convert the chunk to a string
+                const chunk = new TextDecoder().decode(value);
+                buffer += chunk;
+                
+                // Try to parse complete JSON objects from the buffer
+                let startIndex = 0;
+                
+                while (startIndex < buffer.length) {
+                  try {
+                    // Find the start of a JSON object
+                    const jsonStart = buffer.indexOf('{', startIndex);
+                    if (jsonStart === -1) break;
+                    
+                    // Find the matching end of the JSON object
+                    let openBraces = 1;
+                    let jsonEnd = jsonStart + 1;
+                    
+                    while (openBraces > 0 && jsonEnd < buffer.length) {
+                      if (buffer[jsonEnd] === '{') openBraces++;
+                      else if (buffer[jsonEnd] === '}') openBraces--;
+                      jsonEnd++;
+                    }
+                    
+                    // If we found a complete JSON object
+                    if (openBraces === 0) {
+                      const jsonStr = buffer.substring(jsonStart, jsonEnd);
+                      
+                      try {
+                        // Parse the JSON
+                        const event = JSON.parse(jsonStr);
+                        
+                        // Process the event
+                        this.processStreamEvent(event, messageId);
+                        
+                        // Remove the processed JSON from the buffer
+                        buffer = buffer.substring(jsonEnd);
+                        startIndex = 0;
+                      } catch (_e3) {
+                        // If parsing fails, try to fix the JSON
+                        const fixedJson = this.attemptToFixMalformedJson(jsonStr);
+                        if (fixedJson) {
+                          try {
+                            const event = JSON.parse(fixedJson);
+                            this.processStreamEvent(event, messageId);
+                            
+                            // Remove the processed JSON from the buffer
+                            buffer = buffer.substring(jsonEnd);
+                            startIndex = 0;
+                          } catch (_e4) {
+                            // If fixing fails, move on to the next potential JSON object
+                            startIndex = jsonStart + 1;
+                          }
+                        } else {
+                          // If fixing fails, move on to the next potential JSON object
+                          startIndex = jsonStart + 1;
+                        }
+                      }
+                    } else {
+                      // If we didn't find a complete JSON object, break and wait for more data
+                      break;
+                    }
+                  } catch (_e5) {
+                    // If any other error occurs, move the start index forward
+                    startIndex++;
+                  }
+                }
+              }
+            } catch (streamError) {
+              console.error('Stream processing error:', streamError);
+              
+              // Set processing state to false
+              this.isProcessing.set(false);
+              
+              // Send error chunk
+              this.messageChunksSubject.next({
+                type: ChunkType.Error,
+                content: `Stream error: ${streamError instanceof Error ? streamError.message : 'Unknown error'}`,
+                messageId
+              });
+              
+              // Update the message with error
+              this.updateMessage(messageId, `Error: ${streamError instanceof Error ? streamError.message : 'Unknown error'}`, true);
+              
+              reject(streamError);
+            }
+          };
+          
+          // Start processing the stream
+          processStream().then(() => {
+            // Resolve the promise when done
+            resolve();
+          }).catch((err) => {
+            reject(err);
           });
-        }
-        
-        // Check if we received metadata
-        if (!receivedMetadata) {
-          console.log('Stream completed without metadata event, sending error');
+        }).catch((err) => {
+          console.error('Stream setup error:', err);
+          
+          // Set processing state to false
+          this.isProcessing.set(false);
+          
+          // Send error chunk
           this.messageChunksSubject.next({
             type: ChunkType.Error,
-            messageId,
-            content: 'Failed to receive metadata from AI service. Please try again.'
+            content: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+            messageId
           });
-        } else {
-          // Check if we have a chatId stored for this chat
-          const currentChat = this.activeChat();
-          if (currentChat && !currentChat.flowChatId) {
-            console.warn('No chatId was stored from metadata. Conversation context may not be maintained.');
-            
-            // Generate a fallback chatId if needed
-            const fallbackChatId = uuidv4();
-            console.log('Generated fallback chatId:', fallbackChatId);
-            
-            // Store the fallback chatId
-            this.activeChat.update(chat => {
-              if (!chat) return null;
-              return {
-                ...chat,
-                flowChatId: fallbackChatId
-              };
-            });
-            
-            // Update chats list
-            this.updateChatInList();
-            
-            // Log that we've stored both IDs for future use
-            console.log('Stored fallback chatId for future requests:', fallbackChatId);
-          }
-        }
-      };
-      
-      await processStream();
-    } catch (error) {
-      console.error('Error in streamFlowWiseResponse:', error);
-      
-      // Create a user-friendly error message
-      let errorMessage = 'Unable to connect to the AI service.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          errorMessage = 'Network error: Unable to connect to the AI service. Please check your internet connection and try again.';
-        } else if (error.message.includes('timeout')) {
-          errorMessage = 'The request to the AI service timed out. Please try again later.';
-        } else if (error.message.includes('HTTP error')) {
-          errorMessage = `The AI service returned an error (${error.message}). Please try again later.`;
-        }
-      }
-      
-      // Send error event
-      this.messageChunksSubject.next({
-        type: ChunkType.Error,
-        messageId,
-        content: errorMessage
-      });
-      
-      // Update the message with the error
-      this.updateMessage(messageId, errorMessage, true);
-    } finally {
-      // Always ensure we send an end event to properly reset UI state
-      // This is a safety measure in case the error handling above fails
-      setTimeout(() => {
-        console.log('Final safety check: ensuring end event was sent');
+          
+          // Update the message with error
+          this.updateMessage(
+            messageId, 
+            `Error: ${err instanceof Error ? err.message : 'Unknown error'}`, 
+            true
+          );
+          
+          reject(err);
+        });
+      } catch (err) {
+        console.error('Stream setup error:', err);
+        
+        // Set processing state to false
+        this.isProcessing.set(false);
+        
+        // Send error chunk
         this.messageChunksSubject.next({
-          type: ChunkType.End,
+          type: ChunkType.Error,
+          content: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
           messageId
         });
-      }, 1000);
-    }
+        
+        // Update the message with error
+        this.updateMessage(
+          messageId, 
+          `Error: ${err instanceof Error ? err.message : 'Unknown error'}`, 
+          true
+        );
+        
+        reject(err);
+      }
+    });
   }
   
   /**
-   * Process a stream event from FlowWise
+   * Process a stream event from the FlowWise API
    */
-  private processStreamEvent(event: FlowWiseStreamEvent, messageId: string, currentText: string): void {
-    let accumulatedText = currentText;
+  private processStreamEvent(event: FlowWiseStreamEvent, messageId: string): void {
+    // Update the current event signal
+    this.currentEvent.set(event.event);
     
-    // Handle basic event types
+    let message;
+    let errorMessage;
+    let metadata;
+    let sourceDocuments;
+    let reasoningStep;
+    
+    // Process the event based on its type
     switch (event.event) {
       case 'start':
-        // Stream started
+        console.log('Stream started');
+        // Set processing state to true
+        this.isProcessing.set(true);
+        
+        // Send start chunk
         this.messageChunksSubject.next({
           type: ChunkType.Start,
           messageId
         });
-        return;
+        break;
         
       case 'token':
-        // Already handled in streamFlowWiseResponse
-        return;
-        
-      case 'error':
-        console.error('Stream error:', event.data);
-        this.messageChunksSubject.next({
-          type: ChunkType.Error,
-          messageId,
-          content: typeof event.data === 'string' ? event.data : 'An error occurred'
-        });
-        return;
+        // This is the actual content
+        if (typeof event.data === 'string') {
+          // Send the token as a message chunk
+          this.messageChunksSubject.next({
+            type: ChunkType.Content,
+            content: event.data,
+            messageId
+          });
+          
+          // Update the message in the chat
+          this.updateMessage(messageId, event.data, false, true); // Append mode
+        }
+        break;
         
       case 'end':
-        // Stream ended
+        console.log('Stream ended normally');
+        // Set processing state to false
+        this.isProcessing.set(false);
+        
+        // Send end chunk
         this.messageChunksSubject.next({
           type: ChunkType.End,
           messageId
         });
-        return;
-    }
-    
-    // Handle JSON data events
-    try {
-      if (event.data) {
-        // Check if we're in the middle of collecting source documents
-        if (this.isCollectingSourceDocuments) {
-          // Add to buffer
-          this.sourceDocumentBuffer += event.data;
-          console.log('Collecting more source document data...');
-          
-          // Try to parse the buffer to see if it's complete
-          try {
-            const parsedData = JSON.parse(this.sourceDocumentBuffer);
-            
-            // If we get here, the JSON is valid and complete
-            if (parsedData.event === 'sourceDocuments' && Array.isArray(parsedData.data)) {
-              const sourceDocuments = parsedData.data as SourceDocument[];
-              if (sourceDocuments.length > 0) {
-                console.log('Successfully parsed source documents:', sourceDocuments.length);
-                
-                // Store source documents in the active chat
-                this.activeChat.update(chat => {
-                  if (!chat) return null;
-                  return {
-                    ...chat,
-                    sourceDocuments: sourceDocuments
-                  };
-                });
-                
-                // Update chats list to persist the source documents
-                this.updateChatInList();
-                
-                // Immediately save to storage to ensure persistence
-                this.saveChatsToStorage();
-                
-                // Emit source documents to subscribers
-                this.sourceDocumentsSubject.next(sourceDocuments);
-              }
-              
-              // Reset buffer and flag
-              this.sourceDocumentBuffer = '';
-              this.isCollectingSourceDocuments = false;
-            }
-          } catch (error) {
-            // JSON is not complete yet, continue collecting
-            console.log('Source document JSON not complete yet, continuing collection...');
-          }
-          
-          return;
-        }
         
-        // Try to parse the event data as JSON
-        try {
-          const eventData = JSON.parse(event.data);
+        // Mark message as complete
+        message = this.getMessageById(messageId);
+        if (message) {
+          this.updateMessage(messageId, message.content, true);
+        }
+        break;
+        
+      case 'error':
+        console.log('Stream error event:', event.data);
+        // Set processing state to false
+        this.isProcessing.set(false);
+        
+        // Create error message
+        errorMessage = typeof event.data === 'string' 
+          ? `Error: ${event.data}` 
+          : 'An error occurred during processing';
+        
+        // Send error chunk
+        this.messageChunksSubject.next({
+          type: ChunkType.Error,
+          content: errorMessage,
+          messageId
+        });
+        
+        // Mark message as complete with error content
+        this.updateMessage(messageId, errorMessage, true);
+        break;
+        
+      case 'metadata':
+        console.log('Received metadata:', event.data);
+        
+        // Extract chatId and sessionId if available
+        if (event.data && typeof event.data === 'object') {
+          metadata = event.data;
           
-          if (eventData) {
-            // Handle different event types
-            if (eventData.event === 'text') {
-              // Process text event
-              const text = eventData.data?.text || '';
-              if (text) {
-                const updatedContent = accumulatedText + text;
-                this.updateMessage(messageId, updatedContent);
-                accumulatedText = updatedContent;
-              }
-            }
-            else if (eventData.event === 'sourceDocuments') {
-              // Start collecting source documents
-              this.isCollectingSourceDocuments = true;
-              this.sourceDocumentBuffer = event.data;
-              console.log('Started collecting source documents');
-              
-              // Try to parse immediately in case it's a complete JSON
-              try {
-                const parsedData = JSON.parse(this.sourceDocumentBuffer);
-                if (parsedData.event === 'sourceDocuments' && Array.isArray(parsedData.data)) {
-                  const sourceDocuments = parsedData.data as SourceDocument[];
-                  if (sourceDocuments.length > 0) {
-                    console.log('Source documents complete in first chunk:', sourceDocuments.length);
-                    
-                    // Store source documents in the active chat
-                    this.activeChat.update(chat => {
-                      if (!chat) return null;
-                      return {
-                        ...chat,
-                        sourceDocuments: sourceDocuments
-                      };
-                    });
-                    
-                    // Update chats list to persist the source documents
-                    this.updateChatInList();
-                    
-                    // Immediately save to storage to ensure persistence
-                    this.saveChatsToStorage();
-                    
-                    // Emit source documents to subscribers
-                    this.sourceDocumentsSubject.next(sourceDocuments);
-                    
-                    // Reset buffer and flag
-                    this.sourceDocumentBuffer = '';
-                    this.isCollectingSourceDocuments = false;
-                  }
-                }
-              } catch (error) {
-                // JSON is not complete, will continue collecting in subsequent events
-                console.log('Source document JSON not complete in first chunk, will continue collection...');
-              }
-            }
-            else if (eventData.event === 'agentReasoning' && Array.isArray(eventData.data)) {
-              // Process agent reasoning for thinking panel
-              const reasoningSteps = eventData.data as AgentReasoningStep[];
-              if (reasoningSteps.length > 0) {
-                // Process each step to ensure it doesn't have any circular references or complex objects
-                const cleanedSteps = reasoningSteps.map(step => ({
-                  agentName: step.agentName,
-                  messages: [...(step.messages || [])],
-                  next: step.next,
-                  instructions: step.instructions,
-                  usedTools: step.usedTools ? JSON.parse(JSON.stringify(step.usedTools)) : undefined,
-                  sourceDocuments: step.sourceDocuments ? JSON.parse(JSON.stringify(step.sourceDocuments)) : undefined,
-                  artifacts: step.artifacts ? JSON.parse(JSON.stringify(step.artifacts)) : undefined,
-                  nodeId: step.nodeId,
-                  thought: step.thought,
-                  action: step.action,
-                  observation: step.observation
-                }));
-                
-                // Store reasoning steps in the active chat
-                this.activeChat.update(chat => {
-                  if (!chat) return null;
-                  return {
-                    ...chat,
-                    reasoningSteps: cleanedSteps
-                  };
-                });
-                
-                // Immediately save to storage to ensure persistence
-                this.saveChatsToStorage();
-                
-                // Update chats list to persist the reasoning steps
-                this.updateChatInList();
-                
-                // Process each reasoning step
-                reasoningSteps.forEach((step, index) => {
-                  setTimeout(() => {
-                    this.thinkingSubject.next(step);
-                    
-                    // Also send thinking as a message chunk
-                    const thinkingContent = this.formatThinkingStep(step);
-                    this.messageChunksSubject.next({
-                      type: ChunkType.AgentReasoning,
-                      content: thinkingContent,
-                      messageId
-                    });
-                  }, index * 800); // Spread them out a bit for visual effect
-                });
-              }
-            }
-            else if (eventData.event === 'nextAgent' && typeof eventData.data === 'string') {
-              // Handle nextAgent event - this indicates which agent is processing next
-              console.log('Next agent:', eventData.data);
-              
-              // Send nextAgent as a message chunk
-              this.messageChunksSubject.next({
-                type: ChunkType.NextAgent,
-                content: eventData.data,
-                messageId
-              });
-              
-              // Optionally update the thinking panel with the next agent
-              this.thinkingSubject.next({
-                agentName: eventData.data,
-                messages: [`Processing with ${eventData.data}...`],
-                nodeId: 'nextAgent'
-              });
-            }
-            else if (eventData.event === 'usedTools') {
-              // Handle used tools if needed
-              console.log('Used tools:', eventData.data);
-            }
+          // Store chatId and sessionId for future requests
+          if (metadata['chatId'] && typeof metadata['chatId'] === 'string') {
+            this.storeChatId(metadata['chatId']);
           }
-        } catch (error) {
-          console.error('Error parsing event data as JSON:', error);
           
-          // If we're collecting source documents and this is not valid JSON,
-          // it might be a continuation of the previous JSON
-          if (this.isCollectingSourceDocuments) {
-            this.sourceDocumentBuffer += event.data;
-            console.log('Added non-JSON data to source document buffer');
+          if (metadata['sessionId'] && typeof metadata['sessionId'] === 'string') {
+            this.storeSessionId(metadata['sessionId']);
           }
         }
-      }
-    } catch (error) {
-      console.error('Error processing stream event:', error);
+        break;
+        
+      case 'sourceDocuments':
+        console.log('Received source documents:', event.data);
+        
+        // Process source documents
+        if (Array.isArray(event.data)) {
+          sourceDocuments = event.data;
+          this.sourceDocumentsSubject.next(sourceDocuments);
+        }
+        break;
+        
+      case 'agentReasoning':
+        console.log('Received agent reasoning:', event.data);
+        
+        // Process agent reasoning - handle both single object and array formats
+        if (event.data) {
+          if (Array.isArray(event.data)) {
+            // If it's an array, get the last item as the most recent step
+            if (event.data.length > 0) {
+              // Get the most recent reasoning step (last item in the array)
+              reasoningStep = event.data[event.data.length - 1];
+              this.thinkingSubject.next(reasoningStep);
+            }
+            // Store all steps in the chat
+            this.updateReasoningSteps(event.data);
+          } else if (typeof event.data === 'object') {
+            // If it's a single object, process it directly
+            reasoningStep = event.data;
+            this.thinkingSubject.next(reasoningStep);
+            // Store it as a single-item array
+            this.updateReasoningSteps([reasoningStep]);
+          }
+        }
+        break;
+        
+      case 'nextAgent':
+        console.log('Switching to next agent:', event.data);
+        break;
+        
+      default:
+        // Handle unknown event types safely
+        if (typeof event === 'object' && event !== null) {
+          // Use type assertion with Record<string, unknown> for safe property access
+          const eventObj = event as Record<string, unknown>;
+          const eventType = eventObj['event'];
+          const eventData = eventObj['data'];
+          console.log(`Unhandled event type: ${eventType}`, eventData);
+        } else {
+          console.log('Received unknown event format:', event);
+        }
+        break;
     }
+  }
+  
+  /**
+   * Get a message by its ID from the active chat
+   */
+  private getMessageById(messageId: string): Message | undefined {
+    const chat = this.activeChat();
+    if (!chat) return undefined;
     
-    // Don't return anything since the method is void
+    return chat.messages.find(message => message.id === messageId);
+  }
+  
+  /**
+   * Store the chat ID in the active chat
+   */
+  private storeChatId(chatId: string): void {
+    this.activeChat.update(chat => {
+      if (!chat) return null;
+      return {
+        ...chat,
+        flowChatId: chatId
+      };
+    });
+    
+    // Update chats list and save to storage
+    this.updateChatInList();
+    this.saveChatsToStorage();
+    
+    console.log('Stored chat ID:', chatId);
+  }
+  
+  /**
+   * Store the session ID in the active chat
+   */
+  private storeSessionId(sessionId: string): void {
+    this.activeChat.update(chat => {
+      if (!chat) return null;
+      return {
+        ...chat,
+        sessionId
+      };
+    });
+    
+    // Update chats list and save to storage
+    this.updateChatInList();
+    this.saveChatsToStorage();
+    
+    console.log('Stored session ID:', sessionId);
   }
   
   /**
@@ -1158,7 +786,7 @@ export class ChatService {
   /**
    * Update a message's content and completion status
    */
-  private updateMessage(messageId: string, content: string, isComplete = false): void {
+  private updateMessage(messageId: string, content: string, isComplete = false, append = false): void {
     console.log(`Updating message ${messageId}, isComplete: ${isComplete}`);
     
     this.activeChat.update(chat => {
@@ -1167,11 +795,19 @@ export class ChatService {
       const updatedMessages = chat.messages.map(message => {
         if (message.id === messageId) {
           // Create a new message object to ensure change detection
-          return {
-            ...message,
-            content,
-            isComplete
-          };
+          if (append) {
+            return {
+              ...message,
+              content: message.content + content,
+              isComplete
+            };
+          } else {
+            return {
+              ...message,
+              content,
+              isComplete
+            };
+          }
         }
         return message;
       });
@@ -1344,28 +980,28 @@ export class ChatService {
   /**
    * Format source documents into readable text
    */
-  private formatSourceDocuments(documents: any[]): string {
+  private formatSourceDocuments(documents: SourceDocument[]): string {
     if (!documents || documents.length === 0) {
       return '';
     }
     
-    let content = '### Sources\n\n';
+    let content = '## Source Documents\n\n';
     
     documents.forEach((doc, index) => {
-      content += `**Source ${index + 1}**\n`;
+      content += `### Document ${index + 1}\n\n`;
+      content += `${doc.pageContent}\n\n`;
       
       if (doc.metadata) {
-        if (doc.metadata.source) {
-          content += `*Source:* ${doc.metadata.source}\n`;
+        if (doc.metadata['source']) {
+          content += `*Source:* ${doc.metadata['source']}\n`;
         }
-        if (doc.metadata.title) {
-          content += `*Title:* ${doc.metadata.title}\n`;
+        
+        if (doc.metadata['title']) {
+          content += `*Title:* ${doc.metadata['title']}\n`;
         }
       }
       
-      if (doc.pageContent) {
-        content += `\n${doc.pageContent}\n\n`;
-      }
+      content += '\n---\n\n';
     });
     
     return content;
@@ -1375,137 +1011,216 @@ export class ChatService {
    * Attempt to fix malformed JSON that might be truncated or have other issues
    */
   private attemptToFixMalformedJson(jsonData: string): string | null {
-    if (!jsonData) return null;
-    
     try {
-      // First try to parse as is
-      JSON.parse(jsonData);
-      return jsonData; // If it parses successfully, return as is
-    } catch (error) {
-      console.log('JSON parsing failed, attempting to fix...');
-      
+      // First, try to parse it as-is (it might be valid JSON already)
       try {
-        // Check if it's a source document event with potential truncation
-        if (jsonData.includes('"event":"sourceDocuments"')) {
-          console.log('Detected source document event, attempting specialized fix...');
-          
-          // Try to find the start of the array
-          const dataArrayStart = jsonData.indexOf('"data":[');
-          if (dataArrayStart > 0) {
-            // Find the last complete document object
-            let lastCompleteObjectEnd = -1;
-            let openBraces = 0;
-            let inQuotes = false;
-            let escapeNext = false;
-            
-            // Start from the data array start
-            for (let i = dataArrayStart + 7; i < jsonData.length; i++) {
-              const char = jsonData[i];
-              
-              if (escapeNext) {
-                escapeNext = false;
-                continue;
-              }
-              
-              if (char === '\\') {
-                escapeNext = true;
-                continue;
-              }
-              
-              if (char === '"' && !escapeNext) {
-                inQuotes = !inQuotes;
-                continue;
-              }
-              
-              if (!inQuotes) {
-                if (char === '{') {
-                  openBraces++;
-                } else if (char === '}') {
-                  openBraces--;
-                  
-                  // If we've closed an object at the top level
-                  if (openBraces === 0) {
-                    lastCompleteObjectEnd = i;
-                  }
-                }
-              }
-            }
-            
-            // If we found a complete object
-            if (lastCompleteObjectEnd > 0) {
-              // Reconstruct the JSON with the complete objects
-              const fixedJson = jsonData.substring(0, lastCompleteObjectEnd + 1) + ']}';
-              
-              // Validate the fixed JSON
-              try {
-                JSON.parse(fixedJson);
-                console.log('Successfully fixed source document JSON');
-                return fixedJson;
-              } catch (innerError) {
-                console.error('Failed to fix source document JSON:', innerError);
-              }
-            }
-          }
-        }
-        
-        // If specialized fix didn't work, try general approach
-        // Try to find where the valid JSON ends
-        let validJson = '';
-        let openBraces = 0;
-        let openBrackets = 0;
-        let inQuotes = false;
-        let escapeNext = false;
-        
-        for (let i = 0; i < jsonData.length; i++) {
-          const char = jsonData[i];
-          validJson += char;
-          
-          if (escapeNext) {
-            escapeNext = false;
-            continue;
-          }
-          
-          if (char === '\\') {
-            escapeNext = true;
-            continue;
-          }
-          
-          if (char === '"' && !escapeNext) {
-            inQuotes = !inQuotes;
-            continue;
-          }
-          
-          if (!inQuotes) {
-            if (char === '{') {
-              openBraces++;
-            } else if (char === '}') {
-              openBraces--;
-            } else if (char === '[') {
-              openBrackets++;
-            } else if (char === ']') {
-              openBrackets--;
-            }
-            
-            // If all braces and brackets are closed, we have valid JSON
-            if (openBraces === 0 && openBrackets === 0 && validJson.trim().length > 1) {
-              try {
-                JSON.parse(validJson);
-                return validJson;
-              } catch (e) {
-                // Continue searching
-                console.log('Failed to parse JSON:', e);
-              }
-            }
-          }
-        }
-        
-        // If we couldn't fix it, return null
-        console.error('Failed to fix malformed JSON');
-        return null;
-      } catch (fixError) {
-        console.error('Error while trying to fix JSON:', fixError);
+        JSON.parse(jsonData);
+        return jsonData; // It's already valid JSON
+      } catch {
+        // If it's not valid, continue with fixing attempts
+        console.log('JSON is not valid, attempting to fix');
+      }
+      
+      // Check if it's an empty string or not JSON at all
+      if (!jsonData.trim() || (!jsonData.includes('{') && !jsonData.includes('['))) {
         return null;
       }
+      
+      // Specific fixes for common event types
+      
+      // Fix for token events (most common)
+      if (jsonData.includes('"event":"token"')) {
+        const tokenMatch = /"event":"token".*?"data":"([^"]*)/;
+        const match = jsonData.match(tokenMatch);
+        
+        if (match) {
+          // Try to construct a valid token event
+          const fixedJson = `{"event":"token","data":"${match[1]}"}`;
+          try {
+            JSON.parse(fixedJson);
+            console.log('Fixed token event JSON');
+            return fixedJson;
+          } catch {
+            // Continue to other fixing methods
+          }
+        }
+      }
+      
+      // Fix for start events
+      if (jsonData.includes('"event":"start"')) {
+        // Simple fix for start event with no data
+        const fixedJson = '{"event":"start","data":[]}';
+        try {
+          JSON.parse(fixedJson);
+          console.log('Fixed start event JSON');
+          return fixedJson;
+        } catch {
+          // Continue to other fixing methods
+        }
+      }
+      
+      // Fix for end events
+      if (jsonData.includes('"event":"end"')) {
+        // Simple fix for end event with no data
+        const fixedJson = '{"event":"end"}';
+        try {
+          JSON.parse(fixedJson);
+          console.log('Fixed end event JSON');
+          return fixedJson;
+        } catch {
+          // Continue to other fixing methods
+        }
+      }
+      
+      // More complex fixes for events with nested objects
+      
+      // Fix for metadata events
+      if (jsonData.includes('"event":"metadata"')) {
+        const metadataMatch = /"event":"metadata".*?"data":(\{[^}]*)/;
+        const match = jsonData.match(metadataMatch);
+        
+        if (match) {
+          // Try to complete the metadata object
+          let dataObj = match[1];
+          if (!dataObj.endsWith('}')) {
+            dataObj += '}';
+          }
+          
+          const fixedJson = `{"event":"metadata","data":${dataObj}}`;
+          try {
+            JSON.parse(fixedJson);
+            console.log('Fixed metadata event JSON');
+            return fixedJson;
+          } catch {
+            // If that didn't work, try a simpler approach
+            const simpleFixedJson = '{"event":"metadata","data":{}}';
+            try {
+              JSON.parse(simpleFixedJson);
+              console.log('Fixed metadata event with empty data');
+              return simpleFixedJson;
+            } catch {
+              // Continue to other fixing methods
+            }
+          }
+        }
+      }
+      
+      // Fix for sourceDocuments events
+      if (jsonData.includes('"event":"sourceDocuments"')) {
+        // Simple fix for sourceDocuments with empty array
+        const fixedJson = '{"event":"sourceDocuments","data":[]}';
+        try {
+          JSON.parse(fixedJson);
+          console.log('Fixed sourceDocuments event with empty data');
+          return fixedJson;
+        } catch {
+          // Continue to other fixing methods
+        }
+      }
+      
+      // Fix for agentReasoning events
+      if (jsonData.includes('"event":"agentReasoning"')) {
+        // Try to extract the data object if it exists
+        const reasoningMatch = /"event":"agentReasoning".*?"data":(\[|\{)/;
+        const match = jsonData.match(reasoningMatch);
+        
+        if (match) {
+          // Check if it's an array or object
+          if (match[1] === '[') {
+            // It's an array, provide empty array
+            const fixedJson = '{"event":"agentReasoning","data":[]}';
+            try {
+              JSON.parse(fixedJson);
+              console.log('Fixed agentReasoning event with empty array');
+              return fixedJson;
+            } catch {
+              // Continue to other fixing methods
+            }
+          } else {
+            // It's an object, provide empty object
+            const fixedJson = '{"event":"agentReasoning","data":{}}';
+            try {
+              JSON.parse(fixedJson);
+              console.log('Fixed agentReasoning event with empty object');
+              return fixedJson;
+            } catch {
+              // Continue to other fixing methods
+            }
+          }
+        }
+      }
+      
+      // General approach for any JSON: try to find where the valid JSON ends
+      console.log('Attempting general JSON fix approach');
+      let validJson = '';
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inQuotes = false;
+      let escapeNext = false;
+      
+      for (let i = 0; i < jsonData.length; i++) {
+        const char = jsonData[i];
+        validJson += char;
+        
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+        
+        if (char === '\\') {
+          escapeNext = true;
+          continue;
+        }
+        
+        if (char === '"' && !escapeNext) {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        
+        if (!inQuotes) {
+          if (char === '{') {
+            openBraces++;
+          } else if (char === '}') {
+            openBraces--;
+          } else if (char === '[') {
+            openBrackets++;
+          } else if (char === ']') {
+            openBrackets--;
+          }
+          
+          // If all braces and brackets are closed, we have valid JSON
+          if (openBraces === 0 && openBrackets === 0 && validJson.trim().length > 1) {
+            try {
+              JSON.parse(validJson);
+              console.log('Successfully fixed JSON using general approach');
+              return validJson;
+            } catch {
+              // Continue searching
+            }
+          }
+        }
+      }
+      
+      // If we get here and the JSON is still not valid, try one more approach:
+      // Check if we have a complete event structure but missing the closing brace
+      if (jsonData.includes('"event"') && jsonData.includes('"data"')) {
+        // Try adding a closing brace
+        const withClosingBrace = jsonData + '}';
+        try {
+          JSON.parse(withClosingBrace);
+          console.log('Fixed JSON by adding closing brace');
+          return withClosingBrace;
+        } catch {
+          // That didn't work, continue
+        }
+      }
+      
+      // If we couldn't fix it, return null
+      console.error('Failed to fix malformed JSON');
+      return null;
+    } catch {
+      console.error('Error while trying to fix JSON:');
+      return null;
     }
   }
   

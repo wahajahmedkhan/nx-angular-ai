@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { Router } from '@angular/router';
+import { environment } from '../../environment';
 
 export interface LoginRequest {
   email: string;
@@ -32,7 +33,7 @@ export interface RegisterResponse {
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = 'http://135.181.181.121:3003/api/auth';
+  private apiUrl = environment.AUTH_API_URL;
   
   constructor(private http: HttpClient, private router: Router) {}
   
