@@ -5,7 +5,7 @@ import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { ThemeService } from '../../services/theme.service';
 import { MessageComponent } from '../message/message.component';
-import { Message } from '../../models/interfaces';
+import { Message } from '../../models/chat.interfaces';
 
 @Component({
   selector: 'app-chat-area',

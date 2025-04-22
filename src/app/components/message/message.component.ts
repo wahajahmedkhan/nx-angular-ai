@@ -1,7 +1,7 @@
 import { Component, Input, ChangeDetectorRef, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { Message } from '../../models/interfaces';
+import { Message } from '../../models/chat.interfaces';
 import { MessageRole } from '../../models/enums';
 import { marked } from 'marked';
 import { SourceDocumentsComponent } from '../source-documents/source-documents.component';

@@ -2,13 +2,14 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRe
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
-import { SourceDocument } from '../../models/interfaces';
+import { SourceDocument } from '../../models/chat.interfaces';
 
 // Interface for enhanced document with properties
 interface EnhancedDocument {
   original: SourceDocument;
   title: string;
   shortTitle: string;
+  displayLabel: string;
 }
 
 // Extended SourceDocument with additional properties
@@ -17,7 +18,11 @@ interface ExtendedSourceDocument {
   metadata: Record<string, unknown>;
   title: string;
   author: string;
+  source: string;
+  producer?: string;
+  creationDate?: string;
   lineRange: string | null;
+  formattedMetadata?: Record<string, unknown>;
 }
 
 @Component({
@@ -36,10 +41,16 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
   // Selected document properties for modal view
   selectedDocumentTitle = '';
   selectedDocumentAuthor = '';
+  selectedDocumentSource = '';
+  selectedDocumentProducer = '';
+  selectedDocumentCreationDate = '';
   selectedDocumentMetadata: string | null = null;
   selectedDocumentLineRange: string | null = null;
   hasMetadata = false;
   hasLineRange = false;
+  
+  // For template usage
+  metadataKeys: string[] = [];
   
   private subscription = new Subscription();
   
@@ -78,24 +89,42 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
   openModal(doc: SourceDocument): void {
     console.log('Opening modal for document:', doc);
     
+    // Extract metadata
+    const title = this.getFullTitle(doc);
+    const author = this.getAuthor(doc);
+    const source = this.getSource(doc);
+    const producer = this.getProducer(doc);
+    const creationDate = this.getCreationDate(doc);
+    const lineRange = this.getLineRange(doc);
+    const formattedMetadata = this.extractFormattedMetadata(doc);
+    
+    // Update metadata keys for template
+    this.metadataKeys = Object.keys(formattedMetadata);
+    
     // Create extended document with additional properties
     this.selectedDocument = {
       pageContent: doc.pageContent,
       metadata: doc.metadata || {},
-      title: this.getFullTitle(doc),
-      author: this.getAuthor(doc),
-      lineRange: this.getLineRange(doc)
+      title: title,
+      author: author,
+      source: source,
+      producer: producer || '',  // Ensure it's a string
+      creationDate: creationDate || '',  // Ensure it's a string
+      lineRange: lineRange,
+      formattedMetadata: formattedMetadata
     };
     
     // Set selected document properties for display
-    this.selectedDocumentTitle = this.getFullTitle(doc);
-    this.selectedDocumentAuthor = this.getAuthor(doc);
+    this.selectedDocumentTitle = title;
+    this.selectedDocumentAuthor = author;
+    this.selectedDocumentSource = source;
+    this.selectedDocumentProducer = producer || '';
+    this.selectedDocumentCreationDate = creationDate || '';
     
     const metadataDisplay = this.getMetadataDisplay(doc);
     this.selectedDocumentMetadata = metadataDisplay;
     this.hasMetadata = !!metadataDisplay;
     
-    const lineRange = this.getLineRange(doc);
     this.selectedDocumentLineRange = lineRange;
     this.hasLineRange = !!lineRange;
     
@@ -109,11 +138,42 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
   
   // Method to prepare all document data at once to avoid calling methods in template
   private prepareDocumentData(): void {
-    this.sourceDocumentsWithProps = this.sourceDocuments.map(doc => ({
-      original: doc,
-      title: this.getFullTitle(doc),
-      shortTitle: this.getShortTitle(doc)
-    }));
+    this.sourceDocumentsWithProps = this.sourceDocuments.map(doc => {
+      const title = this.getFullTitle(doc);
+      const shortTitle = this.getShortTitle(doc);
+      const author = this.getAuthor(doc);
+      const source = this.getSource(doc);
+      
+      // Create a more descriptive label for the button
+      let displayLabel = 'Source';
+      
+      // Try to use source first (like "Routledge Research...")
+      if (source && source !== 'Unknown Source') {
+        const words = source.split(' ');
+        displayLabel = words.length > 2 ? words.slice(0, 2).join(' ') : source;
+      } 
+      // If no good source, try using author
+      else if (author && author !== 'Unknown Author') {
+        displayLabel = author.split(' ')[0]; // Use first name/word of author
+      }
+      // If no good author, use title
+      else if (title && title !== 'Source Document') {
+        const words = title.split(' ');
+        displayLabel = words.length > 2 ? words.slice(0, 2).join(' ') : title;
+      }
+      
+      // Ensure the label isn't too long
+      if (displayLabel.length > 20) {
+        displayLabel = displayLabel.substring(0, 18) + '...';
+      }
+      
+      return {
+        original: doc,
+        title,
+        shortTitle,
+        displayLabel
+      };
+    });
   }
   
   // Private helper methods
@@ -141,16 +201,45 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
   }
   
   private getAuthor(doc: SourceDocument): string {
-    // Get the first key and its value from metadata as the author
+    // First try to get author from PDF metadata if available
+    if (doc.metadata?.pdf?.info?.Author) {
+      return doc.metadata.pdf.info.Author as string;
+    }
+    
+    // Fallback to first key-value pair
     const keys = Object.keys(doc.metadata || {});
     if (keys.length > 0) {
       const titleKey = keys[0];
-      if (doc.metadata && doc.metadata[titleKey]) {
-        return doc.metadata[titleKey];
+      if (doc.metadata && doc.metadata[titleKey] && typeof doc.metadata[titleKey] === 'string') {
+        return doc.metadata[titleKey] as string;
       }
     }
     
     return 'Unknown Author';
+  }
+  
+  private getSource(doc: SourceDocument): string {
+    // Get the source from metadata
+    if (doc.metadata?.source && typeof doc.metadata.source === 'string') {
+      return doc.metadata.source;
+    }
+    return 'Unknown Source';
+  }
+  
+  private getProducer(doc: SourceDocument): string | undefined {
+    // Get the producer from PDF metadata if available
+    if (doc.metadata?.pdf?.info?.Producer) {
+      return doc.metadata.pdf.info.Producer as string;
+    }
+    return undefined;
+  }
+  
+  private getCreationDate(doc: SourceDocument): string | undefined {
+    // Get the creation date from PDF metadata if available
+    if (doc.metadata?.pdf?.info?.CreationDate) {
+      return doc.metadata.pdf.info.CreationDate as string;
+    }
+    return undefined;
   }
   
   private getLineRange(doc: SourceDocument): string | null {
@@ -201,5 +290,55 @@ export class SourceDocumentsComponent implements OnInit, OnDestroy {
     if (Object.keys(metadataObj).length === 0) return null;
     
     return JSON.stringify(metadataObj, null, 2);
+  }
+  
+  private extractFormattedMetadata(doc: SourceDocument): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    
+    // Extract PDF metadata if available
+    if (doc.metadata?.pdf?.info) {
+      const info = doc.metadata.pdf.info;
+      
+      // Add basic info
+      if (info.Title) result['Title'] = info.Title;
+      if (info.Author) result['Author'] = info.Author;
+      if (info.Producer) result['Producer'] = info.Producer;
+      if (info.CreationDate) {
+        result['Creation Date'] = this.formatPdfDate(info.CreationDate as string);
+      }
+      if (info.ModDate) {
+        result['Modified Date'] = this.formatPdfDate(info.ModDate as string);
+      }
+      
+      // Add other PDF info
+      if (info.PDFFormatVersion) result['PDF Version'] = info.PDFFormatVersion;
+    }
+    
+    // Add source information
+    if (doc.metadata?.source) {
+      result['Source'] = doc.metadata.source;
+    }
+    
+    return result;
+  }
+  
+  private formatPdfDate(dateStr: string): string {
+    // PDF dates are often in format: D:YYYYMMDDHHmmSS+HH'mm'
+    if (dateStr.startsWith('D:')) {
+      try {
+        // Extract components
+        const year = dateStr.substring(2, 6);
+        const month = dateStr.substring(6, 8);
+        const day = dateStr.substring(8, 10);
+        const hour = dateStr.substring(10, 12);
+        const minute = dateStr.substring(12, 14);
+        
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+      } catch {
+        // Ignore error and return original string
+        return dateStr;
+      }
+    }
+    return dateStr;
   }
 }

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, effect, ChangeDetectionStrategy, ChangeDe
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
-import { AgentReasoningStep } from '../../models/interfaces';
+import { AgentReasoningStep } from '../../models/chat.interfaces';
 
 @Component({
   selector: 'app-thinking-panel',

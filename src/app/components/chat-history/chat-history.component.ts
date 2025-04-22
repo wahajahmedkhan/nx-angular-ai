@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRe
 import { CommonModule } from '@angular/common';
 import { ChatService } from '../../services/chat.service';
 import { ThemeService } from '../../services/theme.service';
-import { Chat } from '../../models/interfaces';
+import { Chat } from '../../models/chat.interfaces';
 import { ButtonComponent } from '../../shared/ui/button/button.component';
 import { Subscription } from 'rxjs';
 import { MessageRole } from '../../models/enums';
