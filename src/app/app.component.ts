@@ -38,6 +38,6 @@ export class AppComponent implements OnInit {
     console.log(`Build Time: ${VERSION.timestamp}`);
     
     // Add version to window object for runtime checks
-    window.appVersion = VERSION;
+    (window as any).appVersion = VERSION;
   }
 }
